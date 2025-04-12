@@ -59,7 +59,7 @@ def test_medium_attributes():
     assert role.medium_result() == "人狼ではない"
     assert role.action_description() == ""
     assert role.has_night_action(1) is False # アクションUIは不要
-    assert role.has_night_action(2) is False
+    assert role.has_night_action(2) is True  # 2日目以降はアクションUI必要
 
 def test_knight_attributes():
     role = 騎士(5)

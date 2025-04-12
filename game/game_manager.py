@@ -3,7 +3,6 @@ import json
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from collections import Counter
-# from utils.terminal import clear_screen # Streamlit では使わない
 
 # werewolf_streamlit 内の Player と Role を import
 from .player import Player
@@ -82,26 +81,6 @@ class GameManager:
         
         # ゲーム続行の場合
         return None
-
-    # reveal_roles メソッドは CUI 前提であり、get_game_results で代替するためコメントアウト
-    # def reveal_roles(self):
-    #     """
-    #     全プレイヤーの役職を開示する
-    #     (Streamlit では結果表示の方法を変える)
-    #     results/{今の時間}_results.jsonに保存 (Streamlit では不要かも)
-    #     """
-    #     print("\n=== ゲーム終了: 役職の開示 ===") # st.header など
-    #     results_dic = {}
-    #     for player in self.players:
-    #         print(player.__str__(reveal_role=True)) # st.write など
-    #         # point = 0 if player.role.team != self.victory_team else list([1,0,1,0])[player.role.id%4]
-    #         # ポイント計算ロジックを修正 (勝利チームでなければ0点)
-    #         point = 0
-    #         if self.victory_team is not None and player.role.team == self.victory_team:
-    #             # ポイント配分は仮。勝利チーム内で役職に応じて配点? 一旦全員1点とする
-    #             point = 1
-    #         results_dic[player.name] = player.__str__(reveal_role=True) + (": 勝利" if player.role.team == self.victory_team else ": 敗北") + f" ポイント:{point}"
-    #     # ... (ファイル保存部分はコメントアウト)
 
     def get_game_results(self) -> List[Dict[str, Any]]:
         """ゲーム終了時の結果情報をリストとして返す。"""
@@ -231,7 +210,7 @@ class GameManager:
             処刑されたプレイヤーの名前。処刑がなかった場合は None。
         """
         if not votes:
-            print("DEBUG: 投票なしのため処刑なし") # デバッグ用
+            if self.debug_mode: print("DEBUG: 投票なしのため処刑なし")
             self.last_executed_name = None
             return None
 
@@ -239,37 +218,36 @@ class GameManager:
         candidates = [name for name, count in votes.items() if count == max_votes]
 
         if len(candidates) > 1:
-            print(f"DEBUG: 同票のためランダム処刑: {candidates}") # デバッグ用
+            if self.debug_mode: print(f"DEBUG: 同票のためランダム処刑: {candidates}")
             executed_name = random.choice(candidates)
         else:
             executed_name = candidates[0]
 
-        print(f"DEBUG: 処刑対象は {executed_name}") # デバッグ用
+        if self.debug_mode: print(f"DEBUG: 処刑対象は {executed_name}")
         executed_player = next((p for p in self.players if p.name == executed_name), None)
 
         if executed_player and executed_player.alive:
             executed_player.kill()
             self.last_executed_name = executed_name
-            print(f"DEBUG: {executed_name} を処刑しました") # デバッグ用
+            if self.debug_mode: print(f"DEBUG: {executed_name} を処刑しました")
 
             # 妖狐処刑時の後追い処理
             if executed_player.role.name == "妖狐":
                 alive_foxes = [p for p in self.get_alive_players() if p.role.name == "妖狐"]
-                if not alive_foxes: # これで最後の妖狐だった場合
-                    print("DEBUG: 最後の妖狐が処刑されたため、背徳者の後追い処理を開始") # デバッグ用
+                if not alive_foxes:
+                    if self.debug_mode: print("DEBUG: 最後の妖狐が処刑されたため、背徳者の後追い処理を開始")
                     immoral_players = [p for p in self.get_alive_players() if p.role.name == "背徳者"]
                     for immoral in immoral_players:
-                        if immoral.alive: # すでに他の理由で死んでいないか確認
+                        if immoral.alive:
                             immoral.kill()
-                            print(f"DEBUG: {immoral.name}(背徳者) が後追い自殺") # デバッグ用
-                            # TODO: 後追い自殺したプレイヤーも、何らかの形で記録・表示できると良いかも
+                            if self.debug_mode: print(f"DEBUG: {immoral.name}(背徳者) が後追い自殺")
             return executed_name
         elif executed_player and not executed_player.alive:
-             print(f"DEBUG: 処刑対象 {executed_name} は既に死亡しています") # デバッグ用
-             self.last_executed_name = None # 処刑は行われなかった扱い
+             if self.debug_mode: print(f"DEBUG: 処刑対象 {executed_name} は既に死亡しています")
+             self.last_executed_name = None
              return None
         else:
-            print(f"ERROR: 処刑対象プレイヤー '{executed_name}' が見つかりません") # エラーログ
+            print(f"ERROR: 処刑対象プレイヤー '{executed_name}' が見つかりません") # エラーログは残す
             self.last_executed_name = None
             return None
 
@@ -470,105 +448,76 @@ class GameManager:
         seer_actions = {}
         guard_targets = set()
         attack_targets = []
-        night_victims = set() # 呪殺などで確定した犠牲者
-        alive_players = self.get_alive_players() # 現在の生存者リストを取得
+        night_victims = set()
+        alive_players = self.get_alive_players()
 
         # 1. 各プレイヤーのアクションを分類・処理
         for player_name, action_data in night_actions.items():
             player = next((p for p in self.players if p.name == player_name), None)
             if not player or not player.alive:
-                continue # すでに死亡しているか、存在しないプレイヤーのアクションは無視
+                continue
 
             action_type = action_data.get("type")
             target_name = action_data.get("target")
 
-            # --- 占い師/偽占い師のアクション ---
             if action_type == "seer" and target_name:
                 target_player = next((p for p in alive_players if p.name == target_name), None)
                 if target_player:
-                    # 占い結果を記録 (ここでは結果表示はせず、データのみ持つ)
-                    # 本物の占い師の場合
                     if player.role.name == "占い師":
                         result = target_player.role.seer_result()
                         seer_actions[player_name] = {"target": target_name, "result": result}
-                        # 妖狐を占った場合の呪殺処理
                         if target_player.role.name == "妖狐":
                             target_player.kill()
                             night_victims.add(target_name)
-                            print(f"DEBUG: {player_name}が{target_name}(妖狐)を呪殺") # デバッグ用
-                            # 最後の妖狐が死んだ場合の背徳者の後追い処理
+                            if self.debug_mode: print(f"DEBUG: {player_name}が{target_name}(妖狐)を呪殺")
                             alive_foxes = [p for p in self.get_alive_players() if p.role.name == "妖狐"]
                             if not alive_foxes:
                                 immoral_players = [p for p in self.get_alive_players() if p.role.name == "背徳者"]
                                 for immoral in immoral_players:
-                                    # すでに他の理由で死んでいないか確認
                                     if immoral.alive:
                                         immoral.kill()
                                         night_victims.add(immoral.name)
-                                        print(f"DEBUG: 妖狐全滅により{immoral.name}(背徳者)が後追い") # デバッグ用
-                    # 偽占い師の場合 (偽の結果を記録)
+                                        if self.debug_mode: print(f"DEBUG: 妖狐全滅により{immoral.name}(背徳者)が後追い")
                     elif player.role.name == "偽占い師":
-                        seer_actions[player_name] = {"target": target_name, "result": "村人"} # 常に村人結果
+                        seer_actions[player_name] = {"target": target_name, "result": "村人"}
 
-            # --- 騎士のアクション ---
             elif action_type == "guard" and target_name:
                 guard_targets.add(target_name)
-                print(f"DEBUG: {player_name}が{target_name}を護衛") # デバッグ用
+                if self.debug_mode: print(f"DEBUG: {player_name}が{target_name}を護衛")
 
-            # --- 人狼のアクション ---
             elif action_type == "attack" and target_name:
                 attack_targets.append(target_name)
-                print(f"DEBUG: {player_name}が{target_name}を襲撃対象に選択") # デバッグ用
-
-        # (オプション) 占い結果などを GameManager の状態として保存する場合
-        # self.last_seer_results = seer_actions
+                if self.debug_mode: print(f"DEBUG: {player_name}が{target_name}を襲撃対象に選択")
 
         # 2. 人狼の襲撃対象を決定
         wolf_attack_victim_name = None
         if attack_targets:
-            # 多数決で襲撃対象を決定
             target_counts = Counter(attack_targets)
-            # most_common() は [(要素, 回数)] のリストを返す
-            # 同数一位が複数ある場合も考慮するなら、もう少し複雑なロジックが必要だが、一旦一番多いものを選ぶ
             most_common_target = target_counts.most_common(1)[0][0]
             wolf_attack_victim_name = most_common_target
-            print(f"DEBUG: 人狼の最終襲撃対象は {wolf_attack_victim_name}") # デバッグ用
+            if self.debug_mode: print(f"DEBUG: 人狼の最終襲撃対象は {wolf_attack_victim_name}")
 
         # 3. 襲撃の解決 (守護、妖狐耐性を考慮)
         if wolf_attack_victim_name:
             victim_player = next((p for p in alive_players if p.name == wolf_attack_victim_name), None)
-
-            if victim_player: # ターゲットが生存している場合のみ有効
+            if victim_player:
                 is_protected = wolf_attack_victim_name in guard_targets
                 is_fox = victim_player.role.name == "妖狐"
-
                 if not is_protected and not is_fox:
-                    # 守られておらず、妖狐でもない場合、襲撃成功
                     victim_player.kill()
                     night_victims.add(wolf_attack_victim_name)
-                    print(f"DEBUG: 襲撃成功: {wolf_attack_victim_name} が死亡") # デバッグ用
+                    if self.debug_mode: print(f"DEBUG: 襲撃成功: {wolf_attack_victim_name} が死亡")
                 elif is_protected:
-                    print(f"DEBUG: 襲撃失敗: {wolf_attack_victim_name} は守られていた") # デバッグ用
+                    if self.debug_mode: print(f"DEBUG: 襲撃失敗: {wolf_attack_victim_name} は守られていた")
                 elif is_fox:
-                    print(f"DEBUG: 襲撃失敗: {wolf_attack_victim_name} は妖狐だった") # デバッグ用
+                    if self.debug_mode: print(f"DEBUG: 襲撃失敗: {wolf_attack_victim_name} は妖狐だった")
             else:
-                # ターゲットがすでに（呪殺などで）死んでいた場合
-                print(f"DEBUG: 襲撃対象 {wolf_attack_victim_name} は既に死亡していた") # デバッグ用
+                if self.debug_mode: print(f"DEBUG: 襲撃対象 {wolf_attack_victim_name} は既に死亡していた")
 
         # 4. 最終的な犠牲者リストを作成し、状態を更新
         final_victim_names = sorted(list(set(night_victims)))
         self.last_night_victim_name_list = final_victim_names
 
-        # GameManager のプレイヤーリストの状態も更新されているはず (killメソッドで alive=False になる想定)
-
-        print(f"DEBUG: 今夜の最終犠牲者リスト: {final_victim_names}") # デバッグ用
-        return final_victim_names
-
-        # 4. 結果をゲームマネージャーの状態に反映
-        # self.last_night_victim_name_list = final_victim_names
-
-        # GameManager のプレイヤーリストの状態も更新されているはず (killメソッドで alive=False になる想定)
-
-        print(f"DEBUG: 今夜の最終犠牲者リスト: {final_victim_names}") # デバッグ用
+        if self.debug_mode: print(f"DEBUG: 今夜の最終犠牲者リスト: {final_victim_names}")
         return final_victim_names
         

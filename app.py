@@ -6,24 +6,22 @@ import random
 import time
 
 # プロジェクトルートを Python パスに追加
-# app.py の場所に基づいて動的にパスを設定
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-# game, config モジュールをインポート (パス追加後に実行)
+# game, config モジュールをインポート
 try:
-    from game.game_manager import GameManager # GameManager は後で使う
+    from game.game_manager import GameManager
     from game.player import Player
-    from game.role import role_dict # role_dict は役職設定で使う
+    from game.role import role_dict
     import config.settings as settings
 except ImportError as e:
     st.error(f"モジュールのインポートに失敗しました: {e}")
     st.error("プロジェクト構造を確認し、必要なファイルが存在するか確認してください。")
-    st.stop() # エラー時はアプリを停止
+    st.stop()
 
 # --- 定数 ---
-# 本来は main.py や config に定義すべきだが、一旦ここに置く
 AVAILABLE_ROLES = list(role_dict.keys())
 MIN_PLAYERS = 3
 
@@ -33,7 +31,7 @@ if 'stage' not in st.session_state:
     st.session_state.player_count = 0
     st.session_state.player_names = []
     st.session_state.role_counts = {}
-    st.session_state.error_message = "" # エラー表示用
+    st.session_state.error_message = ""
 
 # --- アプリケーションのタイトル ---
 st.title("人狼ゲーム🐺")
@@ -41,7 +39,7 @@ st.title("人狼ゲーム🐺")
 # --- ゲーム設定 (プレイヤー数・名前) ---
 if st.session_state.stage == 'initial_setup':
     st.header("ゲーム設定")
-    st.session_state.error_message = "" # ステージ開始時にエラーをクリア
+    st.session_state.error_message = ""
 
     # --- プレイヤー数設定 ---
     st.subheader("プレイヤー人数")
@@ -53,7 +51,7 @@ if st.session_state.stage == 'initial_setup':
         if st.button(f"デフォルトの {default_count} 人で設定"):
             st.session_state.player_count = default_count
             use_default_count = True
-            st.rerun() # 数値を反映させるために再実行
+            st.rerun()
 
     # 数値入力
     current_player_count = st.session_state.player_count if st.session_state.player_count >= MIN_PLAYERS else MIN_PLAYERS
@@ -62,8 +60,8 @@ if st.session_state.stage == 'initial_setup':
         min_value=MIN_PLAYERS,
         value=current_player_count,
         step=1,
-        key="player_count_input", # キーを固定
-        disabled=use_default_count # デフォルト使用時は無効化
+        key="player_count_input",
+        disabled=use_default_count
     )
     # number_input の値が変更されたら session_state に反映
     if not use_default_count and num_input != st.session_state.player_count:
@@ -75,45 +73,31 @@ if st.session_state.stage == 'initial_setup':
     if st.session_state.player_count >= MIN_PLAYERS:
         st.subheader("プレイヤー名")
 
-        # デフォルト名の使用
-        use_default_names = False
-        default_names = getattr(settings, "DEFAULT_PLAYER_NAMES", [])
-        if len(default_names) == st.session_state.player_count:
-             if st.button(f"デフォルト名 {default_names} を使用"):
-                 st.session_state.player_names = list(default_names) # コピーして設定
-                 use_default_names = True
-                 st.rerun() # 名前を反映させるために再実行
-
         # 名前入力欄を動的に生成
-        # player_names が player_count と一致しない場合は初期化
         if len(st.session_state.player_names) != st.session_state.player_count:
              st.session_state.player_names = [""] * st.session_state.player_count
 
         input_names = []
-        cols = st.columns(3) # 3列で表示
+        cols = st.columns(3)
         for i in range(st.session_state.player_count):
             container = cols[i % 3]
-            # デフォルト値を設定: session_state の値が空なら f"プレイヤー{i + 1}" を使う
             default_value = st.session_state.player_names[i] or f"プレイヤー{i + 1}"
             name = container.text_input(
                 f"プレイヤー{i + 1}",
-                value=default_value, # 修正箇所
-                key=f"player_name_{i}",
-                disabled=use_default_names
+                value=default_value,
+                key=f"player_name_{i}"
             )
             input_names.append(name)
-        
-        # 名前が変更されたら session_state に反映 (ボタン押下時ではなく入力の都度)
-        # デフォルト値「プレイヤーN」が入力された場合も session_state に反映させる
-        if not use_default_names and input_names != st.session_state.player_names:
+
+        # 名前が変更されたら session_state に反映
+        if input_names != st.session_state.player_names:
              st.session_state.player_names = input_names
-             # ここでは rerun しない（入力途中で消えないように）
 
         # --- 設定確定ボタン ---
         if st.button("役職設定へ進む"):
             # 入力チェック
             valid = True
-            if not st.session_state.player_names: # player_names が空の場合
+            if not st.session_state.player_names:
                 st.session_state.error_message = "プレイヤー名が設定されていません。"
                 valid = False
             elif "" in st.session_state.player_names:
@@ -124,11 +108,10 @@ if st.session_state.stage == 'initial_setup':
                 valid = False
 
             if valid:
-                st.session_state.stage = 'role_setup' # 次のステージへ
-                st.session_state.error_message = ""   # エラーメッセージをクリア
-                st.rerun() # 次のステージを表示するために再実行
+                st.session_state.stage = 'role_setup'
+                st.session_state.error_message = ""
+                st.rerun()
             else:
-                 # エラーがあれば再実行してメッセージを表示
                  st.rerun()
 
     # エラーメッセージ表示
@@ -141,7 +124,7 @@ elif st.session_state.stage == 'role_setup':
     st.header("役職設定")
     st.write(f"プレイヤー数: {st.session_state.player_count} 人")
     st.write(f"プレイヤー名: {', '.join(st.session_state.player_names)}")
-    st.session_state.error_message = "" # ステージ開始時にエラーをクリア
+    st.session_state.error_message = ""
 
     # --- デフォルト役職構成の使用 ---
     use_default_roles = False
@@ -152,37 +135,29 @@ elif st.session_state.stage == 'role_setup':
         if st.button("デフォルトの役職構成を使用"):
             st.session_state.role_counts = default_role_counts.copy()
             use_default_roles = True
-            st.rerun() # 役職数を反映
+            st.rerun()
 
     # --- 役職人数入力 ---
     st.subheader("各役職の人数")
 
     # session_state に role_counts がなければ初期化
     if 'role_counts' not in st.session_state or not st.session_state.role_counts:
-         # 利用可能な全役職キーで0を初期値とする
          st.session_state.role_counts = {role: 0 for role in AVAILABLE_ROLES}
-         # デフォルトが有効ならそれを初期値にする（ボタン押下前でも）
          if default_roles_valid and not use_default_roles:
               st.session_state.role_counts = default_role_counts.copy()
 
-
     input_role_counts = {}
     current_total = 0
-    cols = st.columns(3) # 3列で表示
+    cols = st.columns(3)
     for i, role in enumerate(AVAILABLE_ROLES):
         container = cols[i % 3]
-        # 現在の session_state の値を取得、なければ0
         current_value = st.session_state.role_counts.get(role, 0)
-        
-        # プレイヤー残り人数計算 (この役職を除く)
         temp_total = sum(st.session_state.role_counts.get(r, 0) for r in AVAILABLE_ROLES if r != role)
         max_value_for_role = st.session_state.player_count - temp_total
 
         count = container.number_input(
             role,
             min_value=0,
-            # max_value を設定すると他の入力と連動して挙動が複雑になるため、一旦外すか、注意深く設定する
-            # max_value=max_value_for_role,
             value=current_value,
             step=1,
             key=f"role_count_{role}",
@@ -194,8 +169,6 @@ elif st.session_state.stage == 'role_setup':
     # 入力値が変更されたら session_state に反映
     if not use_default_roles and input_role_counts != st.session_state.role_counts:
         st.session_state.role_counts = input_role_counts
-        # 値変更の都度 rerun すると入力がしづらい場合があるので、一旦コメントアウト
-        # st.rerun()
 
     # --- 残り人数表示 ---
     remaining_players = st.session_state.player_count - current_total
@@ -211,14 +184,12 @@ elif st.session_state.stage == 'role_setup':
     # --- 設定確定ボタン ---
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("設定を確認する", disabled=(remaining_players != 0)): # 合計が一致しないと押せない
-            # バリデーション (ボタン無効化で代替しているが念のため)
+        if st.button("設定を確認する", disabled=(remaining_players != 0)):
             if sum(st.session_state.role_counts.values()) == st.session_state.player_count:
                 st.session_state.stage = 'confirm_setup'
                 st.session_state.error_message = ""
                 st.rerun()
             else:
-                # このメッセージは通常表示されないはず
                 st.session_state.error_message = "役職の合計人数がプレイヤー数と一致しません。"
                 st.rerun()
     with col2:
@@ -246,28 +217,25 @@ elif st.session_state.stage == 'confirm_setup':
     col1, col2 = st.columns(2)
     with col1:
         if st.button("ゲーム開始！"):
-            # GameManager インスタンスを作成してセッション状態に保存
             player_names = st.session_state.player_names
             role_counts = st.session_state.role_counts
-            # 役職リストを作成 (GameManager の __init__ に渡すため)
             roles = []
             for role_name, count in role_counts.items():
                 roles.extend([role_name] * count)
-            
-            # GameManager インスタンス化
+
             # TODO: デバッグモードの設定方法を追加する (例: st.checkbox)
-            game_manager = GameManager(player_names, debug_mode=False)
+            debug_mode = st.checkbox("デバッグモード (ログ詳細表示)", value=False, help="有効にすると、ゲーム進行のデバッグ情報が表示されます")
+            game_manager = GameManager(player_names, debug_mode=debug_mode)
             game_manager.assign_roles(roles)
-            
+
             st.session_state.game_manager = game_manager
-            st.session_state.stage = 'night_phase' # 最初のフェーズへ
-            st.session_state.current_player_index = 0 # 夜アクションを行うプレイヤーのインデックス
-            st.session_state.night_actions = {} # 夜のアクション結果を保存
+            st.session_state.stage = 'night_phase'
+            st.session_state.current_player_index = 0
+            st.session_state.night_actions = {}
             st.rerun()
     with col2:
         if st.button("役職設定に戻る"):
             st.session_state.stage = 'role_setup'
-            # game_manager が存在すれば削除 (設定変更のため)
             if 'game_manager' in st.session_state:
                  del st.session_state.game_manager
             st.rerun()
@@ -278,35 +246,29 @@ elif st.session_state.stage == 'night_phase':
     st.header(f"ターン {gm.turn}: 夜🔮")
 
     alive_players = gm.get_alive_players()
-    current_player_index = st.session_state.get('current_player_index', 0) # 初期値設定
+    current_player_index = st.session_state.get('current_player_index', 0)
     action_confirmed_for_current_player = st.session_state.get(f'action_confirmed_{current_player_index}', False)
 
     # 全員の夜アクションが完了したかチェック
     if current_player_index >= len(alive_players):
-        # 夜のアクション解決処理を実行
         victim_names = gm.resolve_night_actions(st.session_state.night_actions)
-        st.session_state.last_night_victims = victim_names # 結果を保存
+        st.session_state.last_night_victims = victim_names
 
         st.session_state.stage = 'day_phase'
         st.success("全員の夜のアクションが完了しました。昼フェーズへ移行します。")
-        # Reset confirmation flags for next night
         for i in range(len(alive_players)):
             if f'action_confirmed_{i}' in st.session_state:
                 del st.session_state[f'action_confirmed_{i}']
-        # rerun する前にボタンを表示して、ユーザーが結果を確認する時間を設ける
         if st.button("昼へ進む"):
             st.rerun()
-        st.stop() # ボタンが表示されるまで待機
+        st.stop()
 
     # 現在アクションするプレイヤーを取得
-    # インデックスが範囲外になる場合があるためチェックを追加
     if current_player_index < len(alive_players):
         current_player = alive_players[current_player_index]
     else:
-        # 通常ここには到達しないはずだが、安全のためリセットして再実行
         st.warning("プレイヤーインデックスエラー。リセットします。")
         st.session_state.stage = 'initial_setup'
-        # Clean up session state before rerun might be needed here
         st.rerun()
         st.stop()
 
@@ -340,15 +302,13 @@ elif st.session_state.stage == 'night_phase':
                         if target_player:
                             # TODO: 偽占い師の結果生成ロジックを Game Manager 側か Role 側に追加する
                             if current_player.role.name == "偽占い師":
-                                # 仮の偽占い結果 (本来は GameManager か Role で実装すべき)
-                                seer_result = random.choice(["人狼", "人狼ではない"]) # 例: ランダム
+                                seer_result = current_player.role.fake_seer_result()
                                 st.info(f"占い結果（偽）: **{selected_target}** さんは **{seer_result}** です。")
                             else:
                                 seer_result = target_player.role.seer_result()
                                 st.info(f"占い結果: **{selected_target}** さんは **{seer_result}** です。")
                         else:
                             st.error("対象プレイヤーが見つかりませんでした。")
-                    # 騎士、人狼は結果表示なし (結果は朝にわかる)
 
                 elif action_type == "medium":
                     if gm.last_executed_name:
@@ -365,13 +325,13 @@ elif st.session_state.stage == 'night_phase':
 
                 # 次へ進むボタン
                 if st.button("次のプレイヤーへ", key=f"next_player_{current_player.name}"):
-                    st.session_state[f'action_confirmed_{current_player_index}'] = False # Reset flag for the current player index logic
+                    st.session_state[f'action_confirmed_{current_player_index}'] = False
                     st.session_state.current_player_index = current_player_index + 1
                     st.rerun()
 
             # アクションがまだ確定されていない場合 (選択UI表示)
             else:
-                action_type = "none" # デフォルト
+                action_type = "none"
                 selected_target = None
                 can_confirm = False
 
@@ -385,14 +345,14 @@ elif st.session_state.stage == 'night_phase':
                         action_type = "attack"
                     elif current_player.role.name == "占い師" or current_player.role.name == "偽占い師":
                         target_options = [p.name for p in alive_players if p.name != current_player.name]
-                        action_type = "seer" # 偽占い師もタイプは seer で統一？要検討
+                        action_type = "seer"
                     elif current_player.role.name == "騎士":
                         target_options = [p.name for p in alive_players if p.name != current_player.name]
                         action_type = "guard"
 
                     if not target_options:
                         st.info("選択できる対象がいません。")
-                        can_confirm = True # 対象がいなくても確定はできる
+                        can_confirm = True
                     else:
                         selected_target = st.selectbox(
                             action_label,
@@ -404,8 +364,7 @@ elif st.session_state.stage == 'night_phase':
 
                 elif current_player.role.name == "霊媒師":
                     action_type = "medium"
-                    can_confirm = True # 表示を確認したら進める
-                    # 霊媒結果は確定後に表示するため、ここでは表示しない
+                    can_confirm = True
 
                 else: # 村人などアクションUI不要な役職
                     action_type = "none"
@@ -421,25 +380,22 @@ elif st.session_state.stage == 'night_phase':
                     if action_type in ["attack", "seer", "guard"]:
                         if selected_target and selected_target != "選択してください":
                             action_data["target"] = selected_target
-                        elif not target_options: # 選択肢がなかった場合は target なしで OK
+                        elif not target_options:
                             pass
                         else:
                             st.error("対象を選択してください。")
                             valid_action = False
 
                     if valid_action:
-                        # アクションデータを保存
                         st.session_state.night_actions[current_player.name] = action_data
-                        # 確定フラグを立てる
                         st.session_state[f'action_confirmed_{current_player_index}'] = True
-                        # 再実行して結果表示/次のプレイヤーへボタンを表示
                         st.rerun()
 
         else: # action_required が False の場合 (騎士の初日など)
             st.info("このターンでは、特に必要なアクションはありません。")
             if st.button("確認しました", key=f"no_action_confirm_{current_player.name}"):
                 st.session_state.night_actions[current_player.name] = {"type": "none"}
-                st.session_state[f'action_confirmed_{current_player_index}'] = False # Reset flag
+                st.session_state[f'action_confirmed_{current_player_index}'] = False
                 st.session_state.current_player_index = current_player_index + 1
                 st.rerun()
     else:
@@ -457,18 +413,15 @@ elif st.session_state.stage == 'day_phase':
         st.info("昨晩の犠牲者はいませんでした。")
     else:
         st.error(f"昨晩の犠牲者は **{', '.join(last_victims)}** でした。")
-        # 犠牲者情報をクリア（表示が重複しないように）
-        # st.session_state.last_night_victims = [] # クリアするかどうかは設計次第
 
     # --- 勝利判定 ---
     victory_info = gm.check_victory()
     if victory_info:
         st.session_state.stage = 'game_over'
-        st.success(victory_info["message"]) # 勝利メッセージを表示
+        st.success(victory_info["message"])
         if st.button("結果を見る"):
              st.rerun()
-        # rerun しないで待機
-        st.stop() # ゲーム終了なので以降の処理は不要
+        st.stop()
 
     # --- 生存者表示 ---
     st.subheader("生存者")
@@ -480,51 +433,113 @@ elif st.session_state.stage == 'day_phase':
 
     # TODO: 議論時間表示
     st.subheader("議論タイム")
-    st.write("（議論タイム表示は開発中です）")
+    
+    discussion_time = st.slider("議論時間 (分)", min_value=1, max_value=10, value=3, step=1)
+    discussion_seconds = discussion_time * 60
+    
+    timer_container = st.empty()
+    
+    # JavaScriptのカウントダウンタイマーを埋め込む
+    timer_html = f"""
+    <div style="background-color:#f0f0f0; padding:10px; border-radius:5px; text-align:center; margin-bottom:10px;">
+      <h3 id="timer">{discussion_time}:00</h3>
+    </div>
+    <button id="start-timer" style="background-color:#4CAF50; color:white; border:none; padding:10px 20px; 
+     border-radius:5px; cursor:pointer; margin-right:10px;">開始</button>
+    <button id="reset-timer" style="background-color:#f44336; color:white; border:none; padding:10px 20px; 
+     border-radius:5px; cursor:pointer;">リセット</button>
+    
+    <script>
+    let timerInterval;
+    let seconds = {discussion_seconds};
+    let isRunning = false;
+    
+    function updateTimerDisplay() {{
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      document.getElementById('timer').textContent = 
+        `${{minutes}}:${{remainingSeconds < 10 ? '0' : ''}}${{remainingSeconds}}`;
+    }}
+    
+    document.getElementById('start-timer').addEventListener('click', function() {{
+      if (!isRunning) {{
+        isRunning = true;
+        this.textContent = '一時停止';
+        this.style.backgroundColor = '#2196F3';
+        
+        timerInterval = setInterval(function() {{
+          if (seconds > 0) {{
+            seconds--;
+            updateTimerDisplay();
+          }} else {{
+            clearInterval(timerInterval);
+            document.getElementById('timer').textContent = '時間切れ！';
+            document.getElementById('timer').style.color = 'red';
+            document.getElementById('start-timer').disabled = true;
+            document.getElementById('start-timer').style.backgroundColor = '#cccccc';
+          }}
+        }}, 1000);
+      }} else {{
+        isRunning = false;
+        this.textContent = '再開';
+        this.style.backgroundColor = '#4CAF50';
+        clearInterval(timerInterval);
+      }}
+    }});
+    
+    document.getElementById('reset-timer').addEventListener('click', function() {{
+      clearInterval(timerInterval);
+      seconds = {discussion_seconds};
+      updateTimerDisplay();
+      isRunning = false;
+      document.getElementById('start-timer').textContent = '開始';
+      document.getElementById('start-timer').style.backgroundColor = '#4CAF50';
+      document.getElementById('start-timer').disabled = false;
+      document.getElementById('timer').style.color = 'black';
+    }});
+    </script>
+    """
+    
+    # 正しい方法でHTMLコンポーネントを埋め込む
+    with timer_container:
+        st.components.v1.html(timer_html, height=150)
 
     st.markdown("--- ")
 
-    # --- 投票 --- # TODO を修正
+    # --- 投票 ---
     st.subheader("投票")
 
-    # 投票データを初期化 (または既存のものを利用)
     if 'day_votes' not in st.session_state:
         st.session_state.day_votes = {}
 
     # 各生存プレイヤーの投票UIを作成
     for player in alive_players:
         voter_name = player.name
-        # 投票済みの場合は投票先を表示、未投票の場合は投票を促す
         current_vote = st.session_state.day_votes.get(voter_name)
 
         with st.expander(f"🗳️ {voter_name} さんの投票" + (f"済み: {current_vote}" if current_vote else " （クリックして投票）"), expanded=(not current_vote)):
             st.write(f"**{voter_name} さん、処刑したい人に投票してください。**")
-            vote_options = alive_player_names # 自分を含む生存者全員が選択肢
-            
-            # ラジオボタンで投票
+            vote_options = alive_player_names
+
             voted_name = st.radio(
                  "投票先:",
                  options=vote_options,
                  key=f"vote_radio_{voter_name}",
-                 index=None, # デフォルト未選択
-                 # horizontal=True, # 横並びにする場合
-                 label_visibility="collapsed" # ラベル「投票先:」を非表示にする場合
+                 index=None,
+                 label_visibility="collapsed"
             )
-            
-            # 投票ボタン（選択したら押せるように）
+
             if st.button(f"{voter_name} として投票を確定する", key=f"vote_confirm_{voter_name}", disabled=(not voted_name)):
                 st.session_state.day_votes[voter_name] = voted_name
                 st.success(f"{voter_name} さんは {voted_name} さんに投票しました。Expander を閉じてください。")
-                st.rerun() # 投票状態を expander ラベルに反映させる
+                st.rerun()
 
     st.markdown("--- ")
 
     # --- 投票締め切りと処刑実行 ---
-    # 全員の投票が完了したかチェック
     all_voted = len(st.session_state.day_votes) == len(alive_players)
     if all_voted:
         st.subheader("投票結果")
-        # 投票結果を集計して表示 (Counter を使うと便利)
         from collections import Counter
         vote_counts = Counter(st.session_state.day_votes.values())
         st.write("各プレイヤーへの得票数:")
@@ -532,7 +547,6 @@ elif st.session_state.stage == 'day_phase':
             st.write(f"- {name}: {count} 票")
 
         if st.button("投票を締め切り、処刑を実行する"):
-            # 処刑実行
             executed_name = gm.execute_day_vote(vote_counts)
             st.session_state.last_executed_name = executed_name
 
@@ -541,81 +555,60 @@ elif st.session_state.stage == 'day_phase':
             else:
                  st.info("本日は処刑はありませんでした。")
 
-            # 勝利判定 (処刑後)
             victory_info_after_vote = gm.check_victory()
             if victory_info_after_vote:
                  st.session_state.stage = 'game_over'
-                 st.success(victory_info_after_vote["message"]) # 勝利メッセージを表示
+                 st.success(victory_info_after_vote["message"])
                  if st.button("最終結果へ"):
                      st.rerun()
-                 st.stop() # ゲーム終了
+                 st.stop()
             else:
-                 # ゲーム続行 -> 夜フェーズへ自動遷移
                  st.info("投票結果に基づき、夜フェーズへ移行します。")
                  st.session_state.stage = 'night_phase'
                  st.session_state.game_manager.turn += 1
                  st.session_state.current_player_index = 0
                  st.session_state.night_actions = {}
                  st.session_state.day_votes = {}
-                 # 少し待ってから再実行 (メッセージ確認用)
-                 time.sleep(1.5) # 1.5秒待つ
+                 time.sleep(1.5)
                  st.rerun()
-                 # rerun しない (st.stop()かst.rerun()が呼ばれるため)
 
     else:
         st.info(f"投票状況: {len(st.session_state.day_votes)} / {len(alive_players)} 人")
-
-    # 仮の遷移ボタンは削除 (投票完了後に自動遷移するため)
-    # if st.button("夜へ進む（仮）"):
-    #     st.session_state.stage = 'night_phase'
-    # ... (略)
 
 
 # --- ゲーム終了 ---
 elif st.session_state.stage == 'game_over':
     st.header("ゲーム終了🏁")
-    
-    # 勝利メッセージの再表示 (必要なら)
+
     if 'game_manager' in st.session_state and st.session_state.game_manager.victory_team:
          st.balloons()
-         # check_victory で表示済みだが、念のためここでも表示しても良い
-         # victory_info = st.session_state.game_manager.check_victory() # 再度呼び出すか、保存しておいたメッセージを使う
-         # if victory_info:
-         #    st.subheader(victory_info["message"])
          st.subheader(f"🎉 {st.session_state.game_manager.victory_team} 陣営の勝利！ 🎉")
     else:
-         # check_victory が None を返した場合など (通常は起こらないはず)
          st.warning("勝敗が正常に判定できませんでした。")
 
     # --- 結果表示 ---
     if 'game_manager' in st.session_state:
         st.subheader("最終結果")
         game_results = st.session_state.game_manager.get_game_results()
-        # pandas DataFrame に変換して表示すると見やすい
         try:
             import pandas as pd
             df_results = pd.DataFrame(game_results)
-            # 列の順番を指定
             df_results = df_results[["名前", "役職", "陣営", "生死", "勝利"]]
             st.dataframe(df_results, hide_index=True)
         except ImportError:
-            # pandas がない場合は st.table で表示 (少し簡素になる)
             st.table(game_results)
-    
+
     st.markdown("--- ")
     # --- 新しいゲームボタン ---
     if st.button("新しいゲームを始める"):
-         # 状態を完全にリセットして初期設定へ
          keys_to_delete = list(st.session_state.keys())
          for key in keys_to_delete:
              del st.session_state[key]
-         # stage も削除したので、次の rerun で初期化ブロックが実行される
          st.rerun()
 
 # --- どのステージにも当てはまらない場合 (念のため) ---
 else:
     st.error("不明なアプリケーションステージです。リセットします。")
-    # 状態をリセットして再実行
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun() 

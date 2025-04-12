@@ -1,4 +1,5 @@
 from typing import Dict, Type
+import random
 
 # Roleクラス
 class Role:
@@ -8,24 +9,19 @@ class Role:
         self.team = team
     
     def species(self) -> str:
-        # 基本はチームと同じだが、狂人などはオーバーライドする
         return self.team
 
     def seer_result(self) -> str:
-        # 基本はチームと同じだが、人狼や妖狐などはオーバーライドする
-        return "村人" # デフォルトは村人判定
+        return "村人"
 
     def medium_result(self) -> str:
-        # 霊媒結果は基本的に「人狼」か「人狼ではない」
         return "人狼ではない"
 
     def action_description(self) -> str:
-        # 夜アクション時の選択肢ラベル。なければ空文字
         return ""
 
     def has_night_action(self, turn: int) -> bool:
-        # Streamlit UI でアクション選択が必要か
-        return False # デフォルトは不要
+        return False
 
     def __str__(self):
         return self.name
@@ -49,7 +45,7 @@ class 人狼(Role):
         return "襲撃対象"
 
     def has_night_action(self, turn: int) -> bool:
-        return turn > 1 # 初日以外はアクションあり
+        return turn > 1
 
 class 占い師(Role):
     def __init__(self, id: int):
@@ -59,18 +55,20 @@ class 占い師(Role):
         return "占う対象"
 
     def has_night_action(self, turn: int) -> bool:
-        return True # 常にアクションあり
+        return True
 
 class 偽占い師(Role):
     def __init__(self, id: int):
-        # team は村人だが、実際は人狼陣営として扱われることもあるので注意
         super().__init__(id=id, name="偽占い師", team="村人")
 
     def action_description(self) -> str:
         return "占う対象（偽）"
 
     def has_night_action(self, turn: int) -> bool:
-        return True # 常にアクションあり
+        return True
+
+    def fake_seer_result(self) -> str:
+        return random.choice(["人狼", "人狼ではない"])
 
 class 霊媒師(Role):
     def __init__(self, id: int):
@@ -80,11 +78,10 @@ class 霊媒師(Role):
         return "村人"
 
     def medium_result(self) -> str:
-        return "人狼ではない" # 霊媒師自身が死んだ場合
+        return "人狼ではない"
 
     def has_night_action(self, turn: int) -> bool:
-        # 霊媒結果を確認する必要があるため True を返す
-        return True
+        return turn > 1
 
 class 騎士(Role):
     def __init__(self, id: int):
@@ -94,31 +91,31 @@ class 騎士(Role):
         return "守る対象"
 
     def has_night_action(self, turn: int) -> bool:
-        return turn > 1 # 初日以外はアクションあり
+        return turn > 1
 
 class 狂人(Role):
     def __init__(self, id: int):
         super().__init__(id=id, name="狂人", team="人狼")
     
     def species(self):
-        return "村人" # 狂人は村人として数える
+        return "村人"
     def seer_result(self):
-        return "村人" # 狂人は村人判定
+        return "村人"
 
 class 狂信者(Role):
     def __init__(self, id: int):
         super().__init__(id=id, name="狂信者", team="人狼")
     
     def species(self):
-        return "村人" # 狂信者は村人として数える
+        return "村人"
     def seer_result(self):
-        return "村人" # 狂信者は村人判定
+        return "村人"
 
 class 妖狐(Role):
     def __init__(self, id: int):
         super().__init__(id=id, name="妖狐", team="妖狐")
     def seer_result(self) -> str:
-        return "村人" # 実際は呪殺される
+        return "村人"
 
 class 背徳者(Role):
     def __init__(self, id: int):
