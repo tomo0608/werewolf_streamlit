@@ -74,9 +74,17 @@ class 偽占い師(Role):
 
 class 霊媒師(Role):
     def __init__(self, id: int):
-        super().__init__(id=id, name="霊媒師", team="村人")
-    # 霊媒師は結果を見るだけで、能動的なアクション選択はUI上不要なため
-    # has_night_action は False のまま
+        super().__init__(id, "霊媒師", "村人")
+
+    def seer_result(self) -> str:
+        return "村人"
+
+    def medium_result(self) -> str:
+        return "人狼ではない" # 霊媒師自身が死んだ場合
+
+    def has_night_action(self, turn: int) -> bool:
+        # 霊媒結果を確認する必要があるため True を返す
+        return True
 
 class 騎士(Role):
     def __init__(self, id: int):

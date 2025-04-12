@@ -3,6 +3,7 @@ import streamlit as st
 import sys
 import os # os モジュールを追加
 import random
+import time
 
 # プロジェクトルートを Python パスに追加
 # app.py の場所に基づいて動的にパスを設定
@@ -92,15 +93,18 @@ if st.session_state.stage == 'initial_setup':
         cols = st.columns(3) # 3列で表示
         for i in range(st.session_state.player_count):
             container = cols[i % 3]
+            # デフォルト値を設定: session_state の値が空なら f"プレイヤー{i + 1}" を使う
+            default_value = st.session_state.player_names[i] or f"プレイヤー{i + 1}"
             name = container.text_input(
                 f"プレイヤー{i + 1}",
-                value=st.session_state.player_names[i],
+                value=default_value, # 修正箇所
                 key=f"player_name_{i}",
                 disabled=use_default_names
             )
             input_names.append(name)
         
         # 名前が変更されたら session_state に反映 (ボタン押下時ではなく入力の都度)
+        # デフォルト値「プレイヤーN」が入力された場合も session_state に反映させる
         if not use_default_names and input_names != st.session_state.player_names:
              st.session_state.player_names = input_names
              # ここでは rerun しない（入力途中で消えないように）
@@ -546,16 +550,17 @@ elif st.session_state.stage == 'day_phase':
                      st.rerun()
                  st.stop() # ゲーム終了
             else:
-                 # ゲーム続行 -> 夜フェーズへ
-                 st.info("ゲームは続行します。夜フェーズへ移行します。")
-                 if st.button("夜へ進む"):
-                     st.session_state.stage = 'night_phase'
-                     st.session_state.game_manager.turn += 1
-                     st.session_state.current_player_index = 0
-                     st.session_state.night_actions = {}
-                     st.session_state.day_votes = {}
-                     st.rerun()
-                 # rerun しない
+                 # ゲーム続行 -> 夜フェーズへ自動遷移
+                 st.info("投票結果に基づき、夜フェーズへ移行します。")
+                 st.session_state.stage = 'night_phase'
+                 st.session_state.game_manager.turn += 1
+                 st.session_state.current_player_index = 0
+                 st.session_state.night_actions = {}
+                 st.session_state.day_votes = {}
+                 # 少し待ってから再実行 (メッセージ確認用)
+                 time.sleep(1.5) # 1.5秒待つ
+                 st.rerun()
+                 # rerun しない (st.stop()かst.rerun()が呼ばれるため)
 
     else:
         st.info(f"投票状況: {len(st.session_state.day_votes)} / {len(alive_players)} 人")
