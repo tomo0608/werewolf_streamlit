@@ -4,6 +4,7 @@ import sys
 import os # os モジュールを追加
 import random
 import time
+import pandas as pd
 
 # プロジェクトルートを Python パスに追加
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -591,7 +592,6 @@ elif st.session_state.stage == 'game_over':
         st.subheader("最終結果")
         game_results = st.session_state.game_manager.get_game_results()
         try:
-            import pandas as pd
             df_results = pd.DataFrame(game_results)
             df_results = df_results[["名前", "役職", "陣営", "生死", "勝利"]]
             st.dataframe(df_results, hide_index=True)
