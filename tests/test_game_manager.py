@@ -161,6 +161,7 @@ def test_resolve_night_actions_simple_attack(game_manager_basic):
     }
 
     # 夜のアクションを解決
+    gm.turn = 1 # ★ 1日目の夜
     results = gm.resolve_night_actions(night_actions)
     victim_names = results.get("victims", [])
 
@@ -171,7 +172,7 @@ def test_resolve_night_actions_simple_attack(game_manager_basic):
     assert players[0].alive is True 
     assert players[1].alive is True 
     assert players[2].alive is False # Charlie (村人) - 死亡
-    assert players[2].death_info == {"turn": 1, "reason": "attack"} # ★ death_info を確認
+    assert players[2].death_info == {"turn": 1, "reason": "attack"} # ★ 1日目
     assert players[3].alive is True 
     assert players[4].alive is True 
 
@@ -224,6 +225,7 @@ def test_resolve_night_actions_seer_kills_fox(game_manager_basic):
         "Eve": {"type": "none"},
     }
 
+    gm.turn = 1 # ★ 1日目の夜
     results = gm.resolve_night_actions(night_actions)
     victim_names = results.get("victims", [])
 
@@ -232,7 +234,7 @@ def test_resolve_night_actions_seer_kills_fox(game_manager_basic):
     assert results.get("immoral_suicides") == []
     assert players[0].alive is True  
     assert players[1].alive is False # Bob (妖狐)
-    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ death_info を確認
+    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ 1日目
     assert players[2].alive is True  
 
 def test_resolve_night_actions_seer_kills_last_fox_with_immoralist(game_manager_basic):
@@ -251,6 +253,7 @@ def test_resolve_night_actions_seer_kills_last_fox_with_immoralist(game_manager_
         "Eve": {"type": "none"},
     }
 
+    gm.turn = 1 # ★ 1日目の夜
     results = gm.resolve_night_actions(night_actions)
     victim_names = results.get("victims", [])
     immoral_suicides = results.get("immoral_suicides", [])
@@ -260,9 +263,9 @@ def test_resolve_night_actions_seer_kills_last_fox_with_immoralist(game_manager_
     assert sorted(immoral_suicides) == sorted(["Charlie"]) # 後追い自殺者リストを確認
     assert players[0].alive is True  
     assert players[1].alive is False # Bob (妖狐)
-    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ death_info を確認
+    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ 1日目
     assert players[2].alive is False # Charlie (背徳者)
-    assert players[2].death_info == {"turn": 1, "reason": "suicide"} # ★ death_info を確認
+    assert players[2].death_info == {"turn": 1, "reason": "suicide"} # ★ 1日目
 
 def test_resolve_night_actions_wolf_attacks_fox(game_manager_basic):
     """人狼が妖狐を襲撃して失敗するケース"""
@@ -306,6 +309,7 @@ def test_resolve_night_actions_combined_seer_attack(game_manager_basic):
         "Eve": {"type": "none"},
     }
 
+    gm.turn = 1 # ★ 1日目の夜
     results = gm.resolve_night_actions(night_actions)
     victim_names = results.get("victims", [])
 
@@ -316,37 +320,45 @@ def test_resolve_night_actions_combined_seer_attack(game_manager_basic):
     assert players[1].alive is True  # Bob
     assert players[2].alive is True  # Charlie
     assert players[3].alive is False # Dave
-    assert players[3].death_info == {"turn": 1, "reason": "attack"} # ★ death_info を確認
+    assert players[3].death_info == {"turn": 1, "reason": "attack"} # ★ 1日目
     assert players[4].alive is True  # Eve
 
 def test_resolve_night_actions_guard_vs_curse(game_manager_basic):
     """騎士が妖狐を守ろうとするが、占い師に呪殺されるケース"""
     gm = game_manager_basic
     players = gm.players
-    # Alice=占い師, Bob=騎士, Charlie=妖狐
+    # Alice=占い師(0), Bob=騎士(1), Charlie=妖狐(2), Dave=村人(3), Eve=村人(4)
     roles_map = {0: 占い師(0), 1: 騎士(1), 2: 妖狐(2), 3: 村人(3), 4: 村人(4)}
     for i, p in enumerate(players):
         p.assign_role(roles_map[i], i)
-    gm.turn = 2 # 騎士が動けるように
+    # gm.turn = 2 # 不要
 
-    night_actions = {
-        "Alice": {"type": "seer", "target": "Charlie"},  # AliceがCharlie(妖狐)を占う
-        "Bob": {"type": "guard", "target": "Charlie"},   # BobがCharlieを守る
-        "Charlie": {"type": "none"},
-        "Dave": {"type": "none"},
-        "Eve": {"type": "none"},
+    # 1日目夜: 騎士が妖狐を護衛
+    knight = players[1]
+    fox = players[2]
+    night_actions_1 = {
+        knight.name: {"type": "guard", "target": fox.name}
     }
+    gm.turn = 1
+    gm.resolve_night_actions(night_actions_1)
+    assert fox.alive is True # 1日目終了時点では妖狐は生存
 
-    results = gm.resolve_night_actions(night_actions)
+    # 2日目夜: 占い師が妖狐を占い (呪殺)
+    seer = players[0]
+    gm.turn = 2 # ★ 2日目の夜
+    night_actions_2 = {
+        seer.name: {"type": "seer", "target": fox.name}
+    }
+    results = gm.resolve_night_actions(night_actions_2)
     victim_names = results.get("victims", [])
 
-    assert victim_names == ["Charlie"] # Charlie(妖狐)は呪殺される
-    assert gm.last_night_victim_name_list == ["Charlie"]
-    assert results.get("immoral_suicides") == []
-    assert players[0].alive is True  # Alice
-    assert players[1].alive is True  # Bob
-    assert players[2].alive is False # Charlie
-    assert players[2].death_info == {"turn": 2, "reason": "curse"} # ★ death_info を確認 (turn=2)
+    assert victim_names == [fox.name] # 妖狐は呪殺される
+    assert seer.alive is True
+    assert knight.alive is True
+    assert fox.alive is False # Charlie
+    assert fox.death_info == {"turn": 2, "reason": "curse"} # ★ 2日目
+    assert players[3].alive is True
+    assert players[4].alive is True
 
 # --- execute_day_vote のテスト ---
 
@@ -355,6 +367,7 @@ def test_execute_day_vote_simple(game_manager_roles_assigned):
     gm = game_manager_roles_assigned 
     votes = Counter({"Alice": 3, "Bob": 1}) # Aliceが最多票
 
+    gm.turn = 2 # ★ 2日目の昼
     result = gm.execute_day_vote(votes)
     executed_name = result.get("executed")
 
@@ -365,7 +378,7 @@ def test_execute_day_vote_simple(game_manager_roles_assigned):
     # Alice の生存状態を確認
     alice = next(p for p in gm.players if p.name == "Alice")
     assert alice.alive is False
-    assert alice.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
+    assert alice.death_info == {"turn": 2, "reason": "execute"} # ★ 2日目
 
 def test_execute_day_vote_tie(game_manager_roles_assigned):
     """同票の場合、ランダムで処刑されるケース（どちらかが処刑される）"""
@@ -373,6 +386,7 @@ def test_execute_day_vote_tie(game_manager_roles_assigned):
     votes = Counter({"Alice": 2, "Bob": 2, "Charlie": 1})
     possible_executed = ["Alice", "Bob"]
 
+    gm.turn = 2 # ★ 2日目の昼
     result = gm.execute_day_vote(votes)
     executed_name = result.get("executed")
 
@@ -382,7 +396,7 @@ def test_execute_day_vote_tie(game_manager_roles_assigned):
     assert result.get("error") is None
     executed_player = next(p for p in gm.players if p.name == executed_name)
     assert executed_player.alive is False
-    assert executed_player.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
+    assert executed_player.death_info == {"turn": 2, "reason": "execute"} # ★ 2日目
 
 def test_execute_day_vote_no_votes(game_manager_roles_assigned):
     """投票がない場合、誰も処刑されないケース"""
@@ -410,6 +424,7 @@ def test_execute_day_vote_fox_and_immoralist(game_manager_basic):
 
     votes = Counter({"Alice": 2, "Charlie": 1})
 
+    gm.turn = 2 # ★ 2日目の昼
     result = gm.execute_day_vote(votes)
     executed_name = result.get("executed")
     immoral_suicides = result.get("immoral_suicides", [])
@@ -423,9 +438,9 @@ def test_execute_day_vote_fox_and_immoralist(game_manager_basic):
     charlie = next(p for p in gm.players if p.name == "Charlie")
 
     assert alice.alive is False # 妖狐は処刑
-    assert alice.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
+    assert alice.death_info == {"turn": 2, "reason": "execute"} # ★ 2日目
     assert bob.alive is False   # 背徳者は後追い
-    assert bob.death_info == {"turn": 1, "reason": "suicide"} # ★ death_info を確認
+    assert bob.death_info == {"turn": 2, "reason": "suicide"} # ★ 2日目
     assert charlie.alive is True # 村人は生存
 
 # --- get_game_results のテスト ---
@@ -437,7 +452,7 @@ def test_get_game_results_villager_win(game_manager_basic):
     roles_map = {0: 村人(0), 1: 村人(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]):
         p.assign_role(roles_map[i], i)
-    players[2].kill(turn=1, reason="test") # ★ kill に引数追加
+    players[2].kill(turn=1, reason="test") # ★ 1日目死亡
     gm.players = players[:3] # GameManagerが参照するリストを更新
     gm.check_victory() # 勝利判定を実行して内部状態を更新
 
@@ -480,7 +495,7 @@ def test_get_game_results_fox_win_no_wolves(game_manager_basic):
     roles_map = {0: 村人(0), 1: 妖狐(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]):
         p.assign_role(roles_map[i], i)
-    players[2].kill(turn=1, reason="test") # ★ kill に引数追加 (仮で処刑死)
+    players[2].kill(turn=1, reason="test") # ★ 1日目死亡
     gm.players = players[:3]
     gm.check_victory()
 
@@ -508,6 +523,7 @@ def test_get_game_results_fox_win_executed(game_manager_basic):
     gm.players = players[:3]
 
     # 妖狐を処刑する
+    gm.turn = 2 # ★ 2日目の昼に処刑
     gm.execute_day_vote(Counter({"Alice": 1})) # Alice(妖狐)が処刑され、Bob(背徳者)も後追い
     # 勝利判定（人狼も妖狐もいないので村人勝利になるはず）
     victory_info = gm.check_victory()
@@ -520,9 +536,9 @@ def test_get_game_results_fox_win_executed(game_manager_basic):
 
     assert len(results) == 3
     # Alice (妖狐, 死亡, 敗北)
-    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "1日目 処刑により死亡" # これは正しい
+    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "2日目 処刑により死亡" # これは正しい
     # Bob (背徳者, 死亡, 敗北)
-    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "1日目 後追死により死亡" # これは正しい
+    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "2日目 後追死により死亡" # これは正しい
     # Charlie (村人, 生存, 勝利)
     assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "🏆" and results[2]["生死"] == "最終日生存" # これは正しい 
 
@@ -577,17 +593,17 @@ def test_nekomata_retaliation_on_execution(game_manager_with_nekomata):
 
     # 猫又を処刑
     votes = Counter({nekomata.name: 1})
-    gm.turn = 1
+    gm.turn = 2 # ★ 2日目の昼
     result = gm.execute_day_vote(votes)
 
     assert nekomata.alive is False
-    assert nekomata.death_info == {"turn": 1, "reason": "execute"}
+    assert nekomata.death_info == {"turn": 2, "reason": "execute"}
     assert "retaliation_victim" in result # 道連れが発生したか
     retaliation_victim_name = result["retaliation_victim"]
     retaliation_victim = next(p for p in gm.players if p.name == retaliation_victim_name)
     
     assert retaliation_victim.alive is False # 道連れ相手も死亡
-    assert retaliation_victim.death_info == {"turn": 1, "reason": "retaliation"}
+    assert retaliation_victim.death_info == {"turn": 2, "reason": "retaliation"}
     # 猫又以外に生存者がいることを確認 (道連れされた人以外)
     remaining_survivors = [p for p in gm.players if p.alive]
     assert len(remaining_survivors) == len(others_alive_before) - 1

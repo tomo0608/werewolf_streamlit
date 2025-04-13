@@ -31,12 +31,12 @@ def test_player_kill():
     """プレイヤーを死亡させる処理を確認"""
     player = Player("Charlie")
     assert player.is_alive() is True
-    player.kill(turn=2, reason="attack") # ターンと理由を追加
+    player.kill(turn=1, reason="attack") # 1日目
     assert player.is_alive() is False
-    assert player.death_info == {"turn": 2, "reason": "attack"}
+    assert player.death_info == {"turn": 1, "reason": "attack"} # 1日目
     # 既に死んでいるプレイヤーを再度 kill しても状態は変わらない
     death_info_before = player.death_info
-    player.kill(turn=3, reason="execute")
+    player.kill(turn=2, reason="execute") # 2日目
     assert player.is_alive() is False
     assert player.death_info == death_info_before # death_info は上書きされない
 
@@ -46,12 +46,12 @@ def test_player_str_representation():
     player_alive.assign_role(騎士(id=3), id=3)
     player_dead = Player("Eve")
     player_dead.assign_role(妖狐(id=4), id=4)
-    player_dead.kill(turn=1, reason="curse")
+    player_dead.kill(turn=1, reason="curse") # 1日目
 
     # 通常時 (役職非表示)
     assert str(player_alive) == "Dave (生存)"
-    assert str(player_dead) == "Eve (1日目 呪殺)" # 詳細な死亡理由
+    assert str(player_dead) == "Eve (1日目 呪殺)" # 1日目
 
     # 役職表示時
     assert player_alive.__str__(reveal_role=True) == "Dave [騎士] (生存)"
-    assert player_dead.__str__(reveal_role=True) == "Eve [妖狐] (1日目 呪殺)" 
+    assert player_dead.__str__(reveal_role=True) == "Eve [妖狐] (1日目 呪殺)" # 1日目 
