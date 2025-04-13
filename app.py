@@ -1,11 +1,9 @@
 # Streamlit 人狼ゲーム アプリ
 import streamlit as st
 import sys
-import os # os モジュールを追加
-import random
-import time
+import os
 import pandas as pd
-from typing import Dict, Any
+from collections import Counter
 
 # プロジェクトルートを Python パスに追加
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -552,47 +550,33 @@ elif st.session_state.stage == 'day_phase':
         st.session_state.batch_vote_mode = False
     
     # 一括投票モード切り替えチェックボックス
-    st.session_state.batch_vote_mode = st.checkbox("一括投票モード", value=st.session_state.batch_vote_mode)
+    st.session_state.batch_vote_mode = st.checkbox("一括処刑モード (議論の結果、処刑対象を直接決定)", value=st.session_state.batch_vote_mode)
     st.markdown("--- ") # 区切り線
 
-    # --- 一括投票モード --- 
+    # --- 一括処刑モード --- 
     if st.session_state.batch_vote_mode:
-        st.info("各プレイヤーの投票先を選択して、最後に「一括投票を確定する」ボタンを押してください。")
-        batch_votes = {} # 一時的な投票内容保存用
+        st.info("議論の結果、処刑する対象者を一人選択してください。")
         vote_options = alive_player_names
-        cols_batch = st.columns(3)
-        all_selected = True # 全員選択したかフラグ
-        for i, player in enumerate(alive_players):
-            col = cols_batch[i % 3]
-            voter_name = player.name
-            # セッション状態から前回の選択を復元 (なければNone)
-            current_selection = st.session_state.get(f"batch_vote_select_{voter_name}", None)
-            selected_vote = col.selectbox(
-                f"{voter_name} の投票先:",
-                options=[""] + vote_options, # 未選択を許容するため先頭に空文字
-                index=vote_options.index(current_selection) + 1 if current_selection else 0, # index調整
-                key=f"batch_vote_select_{voter_name}"
-            )
-            if not selected_vote: # 未選択があればフラグをFalseに
-                all_selected = False
-            batch_votes[voter_name] = selected_vote
-            # 選択が変わったらセッション状態に保存
-            st.session_state[f"batch_vote_select_{voter_name}"] = selected_vote 
+        selected_target = st.selectbox(
+            "処刑対象者:",
+            options=[""] + vote_options, # 未選択を許容
+            key="batch_execute_target"
+        )
         
-        if st.button("一括投票を確定する", disabled=(not all_selected)):
-            # 空の選択を除外して投票結果を確定
-            final_batch_votes = {voter: target for voter, target in batch_votes.items() if target}
-            st.session_state.day_votes = final_batch_votes
-            st.session_state.execution_processed = False # 処刑未処理状態にする
-            # 一括投票モードをオフに戻す (任意)
-            # st.session_state.batch_vote_mode = False 
-            # 一時的な選択肢をクリア (任意)
-            # for player in alive_players:
-            #     if f"batch_vote_select_{player.name}" in st.session_state:
-            #         del st.session_state[f"batch_vote_select_{player.name}"]
-            st.success("一括投票が完了しました。処刑結果を確認してください。")
-            st.rerun()
-    
+        # 処刑実行ボタン (まだ処刑処理が行われていない場合のみ表示)
+        if not st.session_state.get("execution_processed", False):
+            if st.button("処刑を確定する", disabled=(not selected_target)):
+                if selected_target:
+                    # 選択された対象者に1票だけ入ったCounterを作成
+                    vote_counts = Counter({selected_target: 1})
+                    execution_result = gm.execute_day_vote(vote_counts)
+                    st.session_state.last_execution_result = execution_result 
+                    st.session_state.last_executed_name = execution_result.get("executed")
+                    st.session_state.execution_processed = True
+                    st.success(f"{selected_target} の処刑を決定しました。")
+                else:
+                    st.warning("処刑対象者を選択してください。")
+
     # --- 個別投票モード --- 
     else:
         for player in alive_players:
@@ -606,62 +590,55 @@ elif st.session_state.stage == 'day_phase':
                     "投票先:",
                     options=vote_options,
                     key=f"vote_radio_{voter_name}",
-                    index=vote_options.index(current_vote) if current_vote in vote_options else None, # 修正: 投票済みならデフォルト選択
+                    index=vote_options.index(current_vote) if current_vote in vote_options else None,
                     label_visibility="collapsed"
                 )
 
-                # ラジオボタンの値が変わったら投票を更新 (確定ボタンは不要かも？)
                 if voted_name and voted_name != current_vote:
                     st.session_state.day_votes[voter_name] = voted_name
-                    # 自動で Expander を閉じるのは難しいのでメッセージで促す
                     st.info(f"{voter_name} さんは {voted_name} さんに投票しました。") 
-                    st.rerun() # 状態を更新して再描画
-                    
-                # 確定ボタンを残す場合
-                # if st.button(f"{voter_name} として投票を確定する", key=f"vote_confirm_{voter_name}", disabled=(not voted_name)):
-                #     st.session_state.day_votes[voter_name] = voted_name
-                #     st.success(f"{voter_name} さんは {voted_name} さんに投票しました。Expander を閉じてください。")
-                #     st.rerun()
+                    st.rerun()
 
     st.markdown("--- ")
 
-    # --- 投票締め切りと処刑実行ロジック ---
-    all_voted = len(st.session_state.day_votes) == len(alive_players)
-    execution_result_to_display = None # 表示用結果を初期化
-    
-    if 'execution_processed' not in st.session_state:
-        st.session_state.execution_processed = False
-
-    if all_voted:
-        st.subheader("投票結果")
-        from collections import Counter
-        vote_counts = Counter(st.session_state.day_votes.values())
-        st.write("各プレイヤーへの得票数:")
-        for name, count in vote_counts.most_common():
-            st.write(f"- {name}: {count} 票")
-        st.markdown("--- ")
-
-        # まだ処刑処理が行われていない場合のみ、処刑ボタンを表示・処理
-        if not st.session_state.execution_processed:
-            if st.button("投票を締め切り、処刑を実行する"):
-                execution_result = gm.execute_day_vote(vote_counts)
-                st.session_state.last_execution_result = execution_result 
-                st.session_state.last_executed_name = execution_result.get("executed")
-                st.session_state.execution_processed = True
-                if gm.debug_mode:
-                    st.write("DEBUG: Setting execution_processed to True. No rerun here.") 
-                # ここではリランしない
+    # --- 投票締め切りと処刑実行ロジック・投票状況表示 (個別投票モード時のみ) ---
+    if not st.session_state.batch_vote_mode:
+        all_voted = len(st.session_state.day_votes) == len(alive_players)
         
-        # 処刑処理済みの場合、表示用の結果を取得
-        if st.session_state.execution_processed:
-             execution_result_to_display = st.session_state.get('last_execution_result')
-             if gm.debug_mode:
-                 st.write(f"DEBUG: Fetched last_execution_result: {execution_result_to_display}") # DEBUG
+        if 'execution_processed' not in st.session_state:
+            st.session_state.execution_processed = False
 
-    # --- 処刑結果の表示エリア --- 
-    if execution_result_to_display:
+        if all_voted:
+            st.subheader("投票結果")
+            vote_counts = Counter(st.session_state.day_votes.values())
+            st.write("各プレイヤーへの得票数:")
+            for name, count in vote_counts.most_common():
+                st.write(f"- {name}: {count} 票")
+            st.markdown("--- ")
+
+            # まだ処刑処理が行われていない場合のみ、処刑ボタンを表示・処理
+            if not st.session_state.execution_processed:
+                if st.button("投票を締め切り、処刑を実行する"):
+                    execution_result = gm.execute_day_vote(vote_counts)
+                    st.session_state.last_execution_result = execution_result 
+                    st.session_state.last_executed_name = execution_result.get("executed")
+                    st.session_state.execution_processed = True
+                    if gm.debug_mode:
+                        st.write("DEBUG: Setting execution_processed to True. No rerun here.") 
+                    # リラン不要、下の処理で結果が表示される
+        else: # まだ全員投票していない場合
+            # --- 投票状況の表示エリア (個別投票モード時のみ) --- 
+            st.info(f"投票状況: {len(st.session_state.day_votes)} / {len(alive_players)} 人")
+
+    # --- 処刑結果の取得 (共通処理) ---
+    execution_result_to_display = None
+    if st.session_state.get("execution_processed", False):
+        execution_result_to_display = st.session_state.get('last_execution_result')
         if gm.debug_mode:
-            st.write("DEBUG: Displaying execution results area.") # DEBUG
+            st.write(f"DEBUG: Fetched last_execution_result: {execution_result_to_display}") 
+
+    # --- 処刑結果の表示エリア (共通処理) --- 
+    if execution_result_to_display:
         executed_name = execution_result_to_display.get("executed")
         immoral_suicides = execution_result_to_display.get("immoral_suicides", [])
         retaliation_victim = execution_result_to_display.get("retaliation_victim")
@@ -679,9 +656,8 @@ elif st.session_state.stage == 'day_phase':
             if retaliation_victim:
                 st.error(f"**{executed_name}**(猫又) が処刑されたため、**{retaliation_victim}** を道連れにしました。")
     
-    # --- 次のステップへのボタン表示エリア --- 
-    # (処刑処理済み かつ ゲームオーバーでない かつ エラーがない場合)
-    if st.session_state.execution_processed: 
+    # --- 次のステップへのボタン表示エリア (共通処理) --- 
+    if st.session_state.get("execution_processed", False): 
         victory_info_after_vote = gm.check_victory() # 処刑後の勝利判定
         if gm.debug_mode:
             st.write(f"DEBUG: Victory Check Result after vote: {victory_info_after_vote}") # DEBUG
@@ -712,11 +688,6 @@ elif st.session_state.stage == 'day_phase':
                 if gm.debug_mode:
                     st.write("DEBUG: About to rerun for night phase.") # DEBUG
                 st.rerun()
-
-    # --- 投票状況の表示エリア (全員投票前) ---
-    elif not all_voted: 
-        st.info(f"投票状況: {len(st.session_state.day_votes)} / {len(alive_players)} 人")
-
 
 # --- ゲーム終了 ---
 elif st.session_state.stage == 'game_over':
