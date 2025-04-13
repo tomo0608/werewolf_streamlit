@@ -1,81 +1,99 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import patch, MagicMock
 import sys
 import os
 
-# 親ディレクトリをパスに追加して app モジュールをインポート
-# tests ディレクトリから werewolf_streamlit ディレクトリを指すようにする
+# 親ディレクトリをパスに追加してモジュールをインポート
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if parent_dir not in sys.path:
     sys.path.append(parent_dir)
 
-# streamlit とその関数をモックする
-# (ユニットテスト実行時には Streamlit のUI要素は不要なため)
-st_mock = MagicMock()
-sys.modules['streamlit'] = st_mock
+# Streamlit の基本的な動作（st.session_state など）を模倣する
+# MagicMock を使って、属性アクセスやメソッド呼び出しが可能にする
+mock_st = MagicMock()
 
-# app モジュールをインポート (streamlit モック後)
+# ui.setup_ui をインポート (streamlit モックが必要な場合があるため、ここでインポート)
 try:
-    import app
-except ImportError as e:
-    # パス設定がうまくいかない場合などのエラーハンドリング
-    print(f"Error importing app module: {e}")
-    print("Please ensure the test is run from the correct directory or adjust sys.path.")
-    app = None # テストが失敗するように
+    from ui import setup_ui
+except ImportError as e: # より具体的に ImportError を捕捉
+    print(f"ImportError importing ui.setup_ui: {e}")
+    print(f"sys.path: {sys.path}") # sys.path を確認
+    # traceback を表示して詳細を確認
+    import traceback
+    traceback.print_exc()
+    print("Make sure necessary modules (like streamlit) are mockable or installed.")
+    setup_ui = None
+except Exception as e: # その他の予期せぬエラー
+    print(f"Unexpected error importing ui.setup_ui: {e}")
+    import traceback
+    traceback.print_exc()
+    setup_ui = None
 
 class TestAppRoleSetupValidation(unittest.TestCase):
 
     def setUp(self):
-        # テスト実行前にモジュールがインポートできたか確認
-        if app is None:
-            self.fail("app module could not be imported. Check sys.path setup.")
-        
-        # テストごとにセッション状態を模倣する辞書を初期化
-        # st.session_state の代わりに通常の辞書を使う
-        self.mock_session_state = {
+        if setup_ui is None:
+            self.fail("ui.setup_ui module could not be imported.")
+
+        # setup_ui 内で参照される定数を取得
+        self.AVAILABLE_ROLES = setup_ui.AVAILABLE_ROLES
+
+        # テストごとのセッション状態を模倣する辞書
+        self.mock_session_state_dict = {
             'stage': 'role_setup',
             'player_count': 5,
             'player_names': ['A', 'B', 'C', 'D', 'E'],
-            'role_counts': {role: 0 for role in app.AVAILABLE_ROLES}, # appから定数を参照
+            'role_counts': {role: 0 for role in self.AVAILABLE_ROLES},
             'error_message': ""
         }
-        # app.st.session_state をこのモック辞書に差し替える (パッチング)
-        # ただし、app.py の実装が st.session_state を直接使っているため、
-        # 関数化しないと差し替えが難しい。
-        # ここでは、バリデーションロジックが直接テストできない場合の代替案として、
-        # バリデーション条件を手動でチェックするテストを示す。
+
+        # st.session_state をモック辞書に差し替えるパッチャーを開始
+        # patch の対象は ui.setup_ui 内の streamlit (st)
+        # self.patcher = patch('ui.setup_ui.st', mock_st)
+        # self.mock_st_instance = self.patcher.start()
+        # # モックされた st.session_state が self.mock_session_state_dict を返すように設定
+        # self.mock_st_instance.session_state = self.mock_session_state_dict
+
+        # 代替案： 関数内で session_state を直接操作するのではなく、
+        #          引数として渡すか、クラスベースで状態を管理する方がテストしやすい。
+        #          ここでは元のテスト構造を維持し、条件の手動チェックを継続する。
+
+    # def tearDown(self):
+    #     self.patcher.stop() # パッチを停止
 
     def test_role_count_validation_correct_sum(self):
-        """役職合計人数がプレイヤー数と一致する場合のバリデーション (手動チェック)"""
-        self.mock_session_state['role_counts'] = {
+        """役職合計人数がプレイヤー数と一致する場合 (手動チェック)"""
+        self.mock_session_state_dict['role_counts'] = {
             "人狼": 1, "村人": 2, "占い師": 1, "騎士": 1,
-            # 他の役職は0
-            **{role: 0 for role in app.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師", "騎士"]}
+            **{role: 0 for role in self.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師", "騎士"]}
         }
-        total_roles = sum(self.mock_session_state['role_counts'].values())
-        self.assertEqual(total_roles, self.mock_session_state['player_count'])
-        # 本来は app.py 内のバリデーション関数を呼びたいが、
-        # ここでは条件が満たされていることのみを確認
+        total_roles = sum(self.mock_session_state_dict['role_counts'].values())
+        self.assertEqual(total_roles, self.mock_session_state_dict['player_count'])
+        # render_role_setup を呼び出してエラーメッセージ等を確認するテストを追加可能
+        # 例: setup_ui.render_role_setup() # st.session_state がパッチされている想定
+        # self.assertEqual(self.mock_session_state_dict['error_message'], "")
 
     def test_role_count_validation_incorrect_sum_too_many(self):
-        """役職合計人数がプレイヤー数より多い場合のバリデーション (手動チェック)"""
-        self.mock_session_state['role_counts'] = {
+        """役職合計人数がプレイヤー数より多い場合 (手動チェック)"""
+        self.mock_session_state_dict['role_counts'] = {
             "人狼": 2, "村人": 2, "占い師": 1, "騎士": 1, # 合計6
-             **{role: 0 for role in app.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師", "騎士"]}
+            **{role: 0 for role in self.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師", "騎士"]}
         }
-        total_roles = sum(self.mock_session_state['role_counts'].values())
-        self.assertNotEqual(total_roles, self.mock_session_state['player_count'])
-        self.assertGreater(total_roles, self.mock_session_state['player_count'])
+        total_roles = sum(self.mock_session_state_dict['role_counts'].values())
+        self.assertNotEqual(total_roles, self.mock_session_state_dict['player_count'])
+        self.assertGreater(total_roles, self.mock_session_state_dict['player_count'])
 
     def test_role_count_validation_incorrect_sum_too_few(self):
-        """役職合計人数がプレイヤー数より少ない場合のバリデーション (手動チェック)"""
-        self.mock_session_state['role_counts'] = {
+        """役職合計人数がプレイヤー数より少ない場合 (手動チェック)"""
+        self.mock_session_state_dict['role_counts'] = {
             "人狼": 1, "村人": 2, "占い師": 1, # 合計4
-            **{role: 0 for role in app.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師"]}
+            **{role: 0 for role in self.AVAILABLE_ROLES if role not in ["人狼", "村人", "占い師"]}
         }
-        total_roles = sum(self.mock_session_state['role_counts'].values())
-        self.assertNotEqual(total_roles, self.mock_session_state['player_count'])
-        self.assertLess(total_roles, self.mock_session_state['player_count'])
+        total_roles = sum(self.mock_session_state_dict['role_counts'].values())
+        self.assertNotEqual(total_roles, self.mock_session_state_dict['player_count'])
+        self.assertLess(total_roles, self.mock_session_state_dict['player_count'])
 
 if __name__ == '__main__':
+    # Streamlit のモックを sys.modules に設定
+    sys.modules['streamlit'] = mock_st
     unittest.main() 
