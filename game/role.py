@@ -1,4 +1,4 @@
-from typing import Dict, Type, List, Any
+from typing import Dict, Type
 import random
 
 # Roleクラス
@@ -62,7 +62,7 @@ class 偽占い師(Role):
         super().__init__(id=id, name="偽占い師", team="村人")
 
     def action_description(self) -> str:
-        return "占う対象（偽）"
+        return "占う対象"
 
     def has_night_action(self, turn: int) -> bool:
         return True

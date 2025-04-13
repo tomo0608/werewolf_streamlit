@@ -125,15 +125,3 @@ def test_immoralist_attributes():
     assert role.action_description() == ""
     assert role.has_night_action(1) is False
     assert role.has_night_action(2) is False
-
-# --- (オプション) より詳細なテストケース ---
-# 例: 占い結果や霊媒結果が他の役職に対して正しく機能するかなど
-# def test_seer_results_on_others():
-#     seer = 占い師(0)
-#     wolf = 人狼(1)
-#     fox = 妖狐(2)
-#     # 実際には Player オブジェクト経由で role を取得することになるが、
-#     # Role クラス単体のテストとしてはこれで十分
-#     assert seer.seer_result() == "村人" # 自分自身 (あるいは別の村人)
-#     # assert wolf.seer_result() == "人狼" # Roleクラスのメソッド呼び出しなので、上記 werewolf_attributes でカバーされている
-#     # assert fox.seer_result() == "村人" # 上記 fox_attributes でカバーされている 

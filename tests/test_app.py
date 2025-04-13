@@ -47,20 +47,6 @@ class TestAppRoleSetupValidation(unittest.TestCase):
             'error_message': ""
         }
 
-        # st.session_state をモック辞書に差し替えるパッチャーを開始
-        # patch の対象は ui.setup_ui 内の streamlit (st)
-        # self.patcher = patch('ui.setup_ui.st', mock_st)
-        # self.mock_st_instance = self.patcher.start()
-        # # モックされた st.session_state が self.mock_session_state_dict を返すように設定
-        # self.mock_st_instance.session_state = self.mock_session_state_dict
-
-        # 代替案： 関数内で session_state を直接操作するのではなく、
-        #          引数として渡すか、クラスベースで状態を管理する方がテストしやすい。
-        #          ここでは元のテスト構造を維持し、条件の手動チェックを継続する。
-
-    # def tearDown(self):
-    #     self.patcher.stop() # パッチを停止
-
     def test_role_count_validation_correct_sum(self):
         """役職合計人数がプレイヤー数と一致する場合 (手動チェック)"""
         self.mock_session_state_dict['role_counts'] = {
@@ -69,9 +55,6 @@ class TestAppRoleSetupValidation(unittest.TestCase):
         }
         total_roles = sum(self.mock_session_state_dict['role_counts'].values())
         self.assertEqual(total_roles, self.mock_session_state_dict['player_count'])
-        # render_role_setup を呼び出してエラーメッセージ等を確認するテストを追加可能
-        # 例: setup_ui.render_role_setup() # st.session_state がパッチされている想定
-        # self.assertEqual(self.mock_session_state_dict['error_message'], "")
 
     def test_role_count_validation_incorrect_sum_too_many(self):
         """役職合計人数がプレイヤー数より多い場合 (手動チェック)"""
