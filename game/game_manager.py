@@ -99,7 +99,8 @@ class GameManager:
             "attack": "襲撃",
             "execute": "処刑",
             "curse": "呪殺",
-            "suicide": "後追死"
+            "suicide": "後追死",
+            "retaliation": "道連れ"
         }
         
         for player in self.players:
@@ -195,6 +196,21 @@ class GameManager:
                     if self.debug_mode: 
                         debug_info_list.append(f"{immoral.name}(背徳者) が後追い自殺")
             
+            # ★★★ 猫又処刑時の道連れ処理 ★★★
+            elif executed_player.role.name == "猫又":
+                # 猫又自身を除いた生存者リストを作成
+                other_alive_players = [p for p in self.get_alive_players() if p.alive and p.id != executed_player.id]
+                if other_alive_players:
+                    player_to_retaliate = random.choice(other_alive_players)
+                    player_to_retaliate.kill(self.turn, "retaliation")
+                    result["retaliation_victim"] = player_to_retaliate.name # 道連れにした相手を記録
+                    if self.debug_mode: 
+                        debug_info_list.append(f"{executed_name}(猫又)が処刑されたため、{player_to_retaliate.name}を道連れにしました")
+                else:
+                     if self.debug_mode: 
+                         debug_info_list.append(f"{executed_name}(猫又)が処刑されましたが、道連れにする生存者がいません")
+            
+            # 共通の終了処理
             if self.debug_mode:
                 result["debug"] = "; ".join(debug_info_list)
             return result
@@ -302,17 +318,31 @@ class GameManager:
             if self.debug_mode: 
                 result["debug"].append(f"人狼の最終襲撃対象は {wolf_attack_victim_name}")
 
-        # 3. 襲撃の解決 (守護、妖狐耐性を考慮)
+        # 3. 襲撃の解決 (守護、妖狐耐性、猫又道連れを考慮)
         if wolf_attack_victim_name:
             victim_player = next((p for p in alive_players if p.name == wolf_attack_victim_name), None)
             if victim_player:
                 is_protected = wolf_attack_victim_name in guard_targets
                 is_fox = victim_player.role.name == "妖狐"
                 if not is_protected and not is_fox:
+                    # 襲撃成功
                     victim_player.kill(self.turn, "attack")
                     night_victims.add(wolf_attack_victim_name)
                     if self.debug_mode: 
                         result["debug"].append(f"襲撃成功: {wolf_attack_victim_name} が死亡")
+                    
+                    # ★★★ 猫又の道連れ処理 ★★★
+                    if victim_player.role.name == "猫又":
+                        alive_wolves = [p for p in self.get_alive_players() if p.role.species() == "人狼" and p.alive]
+                        if alive_wolves:
+                            wolf_to_kill = random.choice(alive_wolves)
+                            wolf_to_kill.kill(self.turn, "retaliation") # 死因は "retaliation" とする
+                            night_victims.add(wolf_to_kill.name)
+                            if self.debug_mode:
+                                result["debug"].append(f"{wolf_attack_victim_name}(猫又)が襲撃されたため、{wolf_to_kill.name}(人狼)を道連れにしました")
+                        else:
+                            if self.debug_mode:
+                                result["debug"].append(f"{wolf_attack_victim_name}(猫又)が襲撃されましたが、道連れにする生存人狼がいません")
                 elif is_protected:
                     if self.debug_mode: 
                         result["debug"].append(f"襲撃失敗: {wolf_attack_victim_name} は守られていた")

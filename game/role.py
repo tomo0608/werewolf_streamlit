@@ -1,4 +1,4 @@
-from typing import Dict, Type
+from typing import Dict, Type, List, Any
 import random
 
 # Roleクラス
@@ -93,6 +93,11 @@ class 騎士(Role):
     def has_night_action(self, turn: int) -> bool:
         return turn > 1
 
+class 猫又(Role):
+    """猫又の役職クラス"""
+    def __init__(self, id: int):
+        super().__init__(id=id, name="猫又", team="村人")
+
 class 狂人(Role):
     def __init__(self, id: int):
         super().__init__(id=id, name="狂人", team="人狼")
@@ -132,6 +137,7 @@ role_dict: Dict[str, Type[Role]] = {
     "占い師": 占い師,
     "霊媒師": 霊媒師,
     "騎士": 騎士,
+    "猫又": 猫又,
     "狂人": 狂人,
     "狂信者": 狂信者,
     "妖狐": 妖狐,

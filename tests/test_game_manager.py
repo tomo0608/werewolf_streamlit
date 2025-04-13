@@ -1,11 +1,12 @@
 # werewolf_streamlit/tests/test_game_manager.py
 import pytest
 from collections import Counter
+import random
 
 # テスト対象と関連モジュールを import
 from game.game_manager import GameManager
 from game.player import Player
-from game.role import 村人, 人狼, 占い師, 騎士, 妖狐, 背徳者 # 妖狐, 背徳者 を追加
+from game.role import 村人, 人狼, 占い師, 霊媒師, 騎士, 妖狐, 背徳者, 猫又 # 猫又を追加
 
 # --- GameManager クラスのテスト ---
 
@@ -24,6 +25,18 @@ def game_manager_roles_assigned(game_manager_basic):
     roles_to_assign = ["村人", "村人", "村人", "人狼", "人狼"]
     game_manager_basic.assign_roles(roles_to_assign)
     return game_manager_basic
+
+@pytest.fixture
+def game_manager_with_nekomata(): # ★ 猫又を含む Fixture を追加
+    """猫又を含む役職割り当て済みの GameManager (猫又1, 村人1, 人狼1, 騎士1)"""
+    player_names = ["Alice", "Bob", "Charlie", "Dave"]
+    gm = GameManager(player_names)
+    roles = ["猫又", "村人", "人狼", "騎士"]
+    gm.assign_roles(roles)
+    # 役職確認用 (テストデバッグ時に便利)
+    # for p in gm.players:
+    #     print(f"{p.name}: {p.role.name}")
+    return gm
 
 # --- 初期化と役職割り当てのテスト ---
 
@@ -512,3 +525,137 @@ def test_get_game_results_fox_win_executed(game_manager_basic):
     assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "1日目 後追死により死亡" # これは正しい
     # Charlie (村人, 生存, 勝利)
     assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "🏆" and results[2]["生死"] == "最終日生存" # これは正しい 
+
+# --- 猫又関連のテスト --- ★ ここから新しいテスト
+
+def test_nekomata_retaliation_on_attack(game_manager_with_nekomata):
+    """猫又が夜に人狼に襲撃された場合、人狼を道連れにするか"""
+    gm = game_manager_with_nekomata
+    nekomata = next(p for p in gm.players if p.role.name == "猫又")
+    wolf = next(p for p in gm.players if p.role.name == "人狼")
+    villager = next(p for p in gm.players if p.role.name == "村人")
+    knight = next(p for p in gm.players if p.role.name == "騎士")
+
+    # 人狼が猫又を襲撃
+    night_actions = { wolf.name: {"type": "attack", "target": nekomata.name} }
+    gm.turn = 1
+    result = gm.resolve_night_actions(night_actions)
+
+    assert nekomata.alive is False
+    assert nekomata.death_info == {"turn": 1, "reason": "attack"}
+    assert wolf.alive is False # 人狼も道連れで死亡
+    assert wolf.death_info == {"turn": 1, "reason": "retaliation"}
+    assert villager.alive is True
+    assert knight.alive is True
+    assert nekomata.name in result["victims"]
+    assert wolf.name in result["victims"]
+
+def test_nekomata_no_retaliation_when_guarded(game_manager_with_nekomata):
+    """猫又が騎士に守られて襲撃された場合、道連れは発生しないか"""
+    gm = game_manager_with_nekomata
+    nekomata = next(p for p in gm.players if p.role.name == "猫又")
+    wolf = next(p for p in gm.players if p.role.name == "人狼")
+    knight = next(p for p in gm.players if p.role.name == "騎士")
+
+    # 人狼が猫又を襲撃、騎士が猫又を護衛
+    night_actions = {
+        wolf.name: {"type": "attack", "target": nekomata.name},
+        knight.name: {"type": "guard", "target": nekomata.name}
+    }
+    gm.turn = 1
+    result = gm.resolve_night_actions(night_actions)
+
+    assert nekomata.alive is True # 守られて生存
+    assert wolf.alive is True     # 道連れは発生しない
+    assert not result["victims"]  # 犠牲者はいない
+
+def test_nekomata_retaliation_on_execution(game_manager_with_nekomata):
+    """猫又が昼に処刑された場合、生存者を道連れにするか"""
+    gm = game_manager_with_nekomata
+    nekomata = next(p for p in gm.players if p.role.name == "猫又")
+    others_alive_before = [p for p in gm.players if p.alive and p != nekomata]
+
+    # 猫又を処刑
+    votes = Counter({nekomata.name: 1})
+    gm.turn = 1
+    result = gm.execute_day_vote(votes)
+
+    assert nekomata.alive is False
+    assert nekomata.death_info == {"turn": 1, "reason": "execute"}
+    assert "retaliation_victim" in result # 道連れが発生したか
+    retaliation_victim_name = result["retaliation_victim"]
+    retaliation_victim = next(p for p in gm.players if p.name == retaliation_victim_name)
+    
+    assert retaliation_victim.alive is False # 道連れ相手も死亡
+    assert retaliation_victim.death_info == {"turn": 1, "reason": "retaliation"}
+    # 猫又以外に生存者がいることを確認 (道連れされた人以外)
+    remaining_survivors = [p for p in gm.players if p.alive]
+    assert len(remaining_survivors) == len(others_alive_before) - 1
+    assert nekomata not in remaining_survivors
+    assert retaliation_victim not in remaining_survivors
+
+def test_nekomata_no_retaliation_on_execution_if_last(game_manager_basic):
+    """猫又が最後の生存者として処刑された場合、道連れは発生しないか"""
+    gm = game_manager_basic
+    # 猫又と人狼のみの状態を作る
+    players = [Player("Alice"), Player("Bob")]
+    gm.players = players
+    gm.assign_roles(["猫又", "人狼"])
+    nekomata = players[0]
+    wolf = players[1]
+    
+    # 人狼を殺しておく (猫又のみ生存)
+    wolf.kill(1, "test") 
+    gm.turn = 2 # 2日目
+    
+    # 猫又を処刑
+    votes = Counter({nekomata.name: 1})
+    result = gm.execute_day_vote(votes)
+
+    assert nekomata.alive is False
+    assert "retaliation_victim" not in result # 道連れは発生しない
+
+def test_nekomata_victory_condition(game_manager_with_nekomata):
+    """猫又(市民陣営)がいる場合の勝利判定が正しいか"""
+    gm = game_manager_with_nekomata
+    wolf = next(p for p in gm.players if p.role.name == "人狼")
+
+    # 人狼を殺す
+    wolf.kill(1, "test")
+    gm.check_victory()
+    assert gm.victory_team == "村人" # 猫又は村人陣営なので村人勝利
+
+def test_get_game_results_with_nekomata(game_manager_with_nekomata):
+    """get_game_resultsで猫又の道連れ死が表示されるか"""
+    gm = game_manager_with_nekomata
+    nekomata = next(p for p in gm.players if p.role.name == "猫又")
+    wolf = next(p for p in gm.players if p.role.name == "人狼")
+    villager = next(p for p in gm.players if p.role.name == "村人")
+    knight = next(p for p in gm.players if p.role.name == "騎士")
+
+    # 1日目夜: 人狼が猫又を襲撃 -> 猫又死亡、人狼道連れ死
+    night_actions_1 = { wolf.name: {"type": "attack", "target": nekomata.name} }
+    gm.turn = 1
+    gm.resolve_night_actions(night_actions_1)
+    
+    # 2日目昼: 村人を処刑
+    gm.turn = 2
+    votes_2 = Counter({villager.name: 1})
+    gm.execute_day_vote(votes_2)
+
+    gm.check_victory() # この時点では騎士のみ生存？ -> 村人勝利
+    results = gm.get_game_results()
+
+    assert gm.victory_team == "村人"
+    assert len(results) == 4
+
+    result_nekomata = next(r for r in results if r["名前"] == nekomata.name)
+    result_wolf = next(r for r in results if r["名前"] == wolf.name)
+    result_villager = next(r for r in results if r["名前"] == villager.name)
+    result_knight = next(r for r in results if r["名前"] == knight.name)
+
+    assert result_nekomata["生死"] == "1日目 襲撃により死亡"
+    assert result_wolf["生死"] == "1日目 道連れにより死亡" # ★ 道連れ死を確認
+    assert result_villager["生死"] == "2日目 処刑により死亡"
+    assert result_knight["生死"] == "最終日生存"
+    assert result_knight["勝利"] == "🏆" 

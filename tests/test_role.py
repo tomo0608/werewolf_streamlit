@@ -2,7 +2,7 @@
 import pytest
 
 # テスト対象のモジュールを import (絶対パスで)
-from game.role import Role, 村人, 人狼, 占い師, 偽占い師, 霊媒師, 騎士, 狂人, 狂信者, 妖狐, 背徳者
+from game.role import Role, 村人, 人狼, 占い師, 偽占い師, 霊媒師, 騎士, 狂人, 狂信者, 妖狐, 背徳者, 猫又
 
 # --- 各役職の基本的な属性テスト ---
 
@@ -71,6 +71,16 @@ def test_knight_attributes():
     assert role.action_description() == "守る対象"
     assert role.has_night_action(1) is False # 初日はアクションなし
     assert role.has_night_action(2) is True
+
+def test_nekomata_attributes():
+    """猫又の属性が正しいか"""
+    role = 猫又(7) # 適当なID
+    assert role.name == "猫又"
+    assert role.team == "村人"
+    assert role.species() == "村人" # species() は team を返すはず
+    assert role.seer_result() == "村人"
+    assert role.medium_result() == "人狼ではない"
+    assert role.has_night_action(1) is False # 夜のアクションなし
 
 def test_madman_attributes():
     role = 狂人(6)

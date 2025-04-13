@@ -5,6 +5,7 @@ import os # os モジュールを追加
 import random
 import time
 import pandas as pd
+from typing import Dict, Any
 
 # プロジェクトルートを Python パスに追加
 project_root = os.path.dirname(os.path.abspath(__file__))
@@ -593,6 +594,7 @@ elif st.session_state.stage == 'day_phase':
             st.write("DEBUG: Displaying execution results area.") # DEBUG
         executed_name = execution_result_to_display.get("executed")
         immoral_suicides = execution_result_to_display.get("immoral_suicides", [])
+        retaliation_victim = execution_result_to_display.get("retaliation_victim")
         error_message = execution_result_to_display.get("error")
 
         if error_message:
@@ -604,6 +606,8 @@ elif st.session_state.stage == 'day_phase':
                  st.info("本日は処刑はありませんでした。")
             if immoral_suicides:
                 st.warning(f"妖狐が処刑されたため、**{', '.join(immoral_suicides)}** が後を追いました。")
+            if retaliation_victim:
+                st.error(f"**{executed_name}**(猫又) が処刑されたため、**{retaliation_victim}** を道連れにしました。")
     
     # --- 次のステップへのボタン表示エリア --- 
     # (処刑処理済み かつ ゲームオーバーでない かつ エラーがない場合)
