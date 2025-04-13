@@ -1,4 +1,5 @@
 streamlit
 pytest
 pandas
-pyarrow 
+pyarrow
+typing-extensions
