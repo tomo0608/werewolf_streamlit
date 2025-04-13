@@ -46,7 +46,7 @@ def test_fake_seer_attributes():
     assert role.species() == "村人"
     assert role.seer_result() == "村人"
     assert role.medium_result() == "人狼ではない"
-    assert role.action_description() == "占う対象（偽）"
+    assert role.action_description() == "占う対象"
     assert role.has_night_action(1) is True
     assert role.has_night_action(2) is True
 
