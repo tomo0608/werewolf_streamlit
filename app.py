@@ -548,25 +548,80 @@ elif st.session_state.stage == 'day_phase':
     st.subheader("投票")
     if 'day_votes' not in st.session_state:
         st.session_state.day_votes = {}
-    for player in alive_players:
-        voter_name = player.name
-        current_vote = st.session_state.day_votes.get(voter_name)
-        with st.expander(f"🗳️ {voter_name} さんの投票" + (f"済み: {current_vote}" if current_vote else " （クリックして投票）"), expanded=(not current_vote)):
-            st.write(f"**{voter_name} さん、処刑したい人に投票してください。**")
-            vote_options = alive_player_names
+    if 'batch_vote_mode' not in st.session_state:
+        st.session_state.batch_vote_mode = False
+    
+    # 一括投票モード切り替えチェックボックス
+    st.session_state.batch_vote_mode = st.checkbox("一括投票モード", value=st.session_state.batch_vote_mode)
+    st.markdown("--- ") # 区切り線
 
-            voted_name = st.radio(
-                 "投票先:",
-                 options=vote_options,
-                 key=f"vote_radio_{voter_name}",
-                 index=None,
-                 label_visibility="collapsed"
+    # --- 一括投票モード --- 
+    if st.session_state.batch_vote_mode:
+        st.info("各プレイヤーの投票先を選択して、最後に「一括投票を確定する」ボタンを押してください。")
+        batch_votes = {} # 一時的な投票内容保存用
+        vote_options = alive_player_names
+        cols_batch = st.columns(3)
+        all_selected = True # 全員選択したかフラグ
+        for i, player in enumerate(alive_players):
+            col = cols_batch[i % 3]
+            voter_name = player.name
+            # セッション状態から前回の選択を復元 (なければNone)
+            current_selection = st.session_state.get(f"batch_vote_select_{voter_name}", None)
+            selected_vote = col.selectbox(
+                f"{voter_name} の投票先:",
+                options=[""] + vote_options, # 未選択を許容するため先頭に空文字
+                index=vote_options.index(current_selection) + 1 if current_selection else 0, # index調整
+                key=f"batch_vote_select_{voter_name}"
             )
+            if not selected_vote: # 未選択があればフラグをFalseに
+                all_selected = False
+            batch_votes[voter_name] = selected_vote
+            # 選択が変わったらセッション状態に保存
+            st.session_state[f"batch_vote_select_{voter_name}"] = selected_vote 
+        
+        if st.button("一括投票を確定する", disabled=(not all_selected)):
+            # 空の選択を除外して投票結果を確定
+            final_batch_votes = {voter: target for voter, target in batch_votes.items() if target}
+            st.session_state.day_votes = final_batch_votes
+            st.session_state.execution_processed = False # 処刑未処理状態にする
+            # 一括投票モードをオフに戻す (任意)
+            # st.session_state.batch_vote_mode = False 
+            # 一時的な選択肢をクリア (任意)
+            # for player in alive_players:
+            #     if f"batch_vote_select_{player.name}" in st.session_state:
+            #         del st.session_state[f"batch_vote_select_{player.name}"]
+            st.success("一括投票が完了しました。処刑結果を確認してください。")
+            st.rerun()
+    
+    # --- 個別投票モード --- 
+    else:
+        for player in alive_players:
+            voter_name = player.name
+            current_vote = st.session_state.day_votes.get(voter_name)
+            with st.expander(f"🗳️ {voter_name} さんの投票" + (f"済み: {current_vote}" if current_vote else " （クリックして投票）"), expanded=(not current_vote)):
+                st.write(f"**{voter_name} さん、処刑したい人に投票してください。**")
+                vote_options = alive_player_names
 
-            if st.button(f"{voter_name} として投票を確定する", key=f"vote_confirm_{voter_name}", disabled=(not voted_name)):
-                st.session_state.day_votes[voter_name] = voted_name
-                st.success(f"{voter_name} さんは {voted_name} さんに投票しました。Expander を閉じてください。")
-                st.rerun()
+                voted_name = st.radio(
+                    "投票先:",
+                    options=vote_options,
+                    key=f"vote_radio_{voter_name}",
+                    index=vote_options.index(current_vote) if current_vote in vote_options else None, # 修正: 投票済みならデフォルト選択
+                    label_visibility="collapsed"
+                )
+
+                # ラジオボタンの値が変わったら投票を更新 (確定ボタンは不要かも？)
+                if voted_name and voted_name != current_vote:
+                    st.session_state.day_votes[voter_name] = voted_name
+                    # 自動で Expander を閉じるのは難しいのでメッセージで促す
+                    st.info(f"{voter_name} さんは {voted_name} さんに投票しました。") 
+                    st.rerun() # 状態を更新して再描画
+                    
+                # 確定ボタンを残す場合
+                # if st.button(f"{voter_name} として投票を確定する", key=f"vote_confirm_{voter_name}", disabled=(not voted_name)):
+                #     st.session_state.day_votes[voter_name] = voted_name
+                #     st.success(f"{voter_name} さんは {voted_name} さんに投票しました。Expander を閉じてください。")
+                #     st.rerun()
 
     st.markdown("--- ")
 
