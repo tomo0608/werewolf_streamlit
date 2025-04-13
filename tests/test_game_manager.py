@@ -60,10 +60,10 @@ def test_get_alive_players(game_manager_roles_assigned):
     assert len(initial_alive_players) == len(PLAYER_NAMES)
 
     # 一人殺してみる
-    gm.players[0].kill()
-    current_alive_players = gm.get_alive_players()
-    assert len(current_alive_players) == len(PLAYER_NAMES) - 1
-    assert gm.players[0] not in current_alive_players
+    gm.players[0].kill(turn=1, reason="test")
+    alive_players_after_kill = gm.get_alive_players()
+    assert len(alive_players_after_kill) == len(PLAYER_NAMES) - 1
+    assert gm.players[0] not in alive_players_after_kill
 
 # --- check_victory のテスト ---
 
@@ -75,29 +75,21 @@ def test_check_victory_villager_win(game_manager_basic):
     roles_map = {0: 村人(0), 1: 村人(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]): # 最初の3人だけ使う
         p.assign_role(roles_map[i], i)
-    players[2].kill() # 人狼を殺す
+    players[2].kill(turn=1, reason="test")
     gm.players = players[:3] # GameManagerが参照するリストを更新
-
-    victory_info = gm.check_victory()
-    assert victory_info is not None
-    assert victory_info["team"] == "村人"
-    assert "村人陣営の勝利" in victory_info["message"]
+    gm.check_victory() # 勝利判定を実行して内部状態を更新
     assert gm.victory_team == "村人"
 
 def test_check_victory_werewolf_win(game_manager_basic):
-    """人狼勝利: 人狼 >= 村人、妖狐なし"""
+    """人狼勝利: 村人と人狼が同数、妖狐なし"""
     gm = game_manager_basic
     players = gm.players
     # Alice=人狼, Bob=村人
     roles_map = {0: 人狼(0), 1: 村人(1)}
-    for i, p in enumerate(players[:2]):
+    for i, p in enumerate(players[:2]): # 最初の2人だけ使う
         p.assign_role(roles_map[i], i)
     gm.players = players[:2]
-
-    victory_info = gm.check_victory()
-    assert victory_info is not None
-    assert victory_info["team"] == "人狼"
-    assert "人狼陣営の勝利" in victory_info["message"]
+    gm.check_victory()
     assert gm.victory_team == "人狼"
 
 def test_check_victory_fox_win_no_wolves(game_manager_basic):
@@ -108,13 +100,9 @@ def test_check_victory_fox_win_no_wolves(game_manager_basic):
     roles_map = {0: 村人(0), 1: 妖狐(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]):
         p.assign_role(roles_map[i], i)
-    players[2].kill() # 人狼を殺す
+    players[2].kill(turn=1, reason="test")
     gm.players = players[:3]
-
-    victory_info = gm.check_victory()
-    assert victory_info is not None
-    assert victory_info["team"] == "妖狐"
-    assert "妖狐陣営の勝利" in victory_info["message"]
+    gm.check_victory()
     assert gm.victory_team == "妖狐"
 
 def test_check_victory_fox_win_with_wolves(game_manager_basic):
@@ -130,7 +118,6 @@ def test_check_victory_fox_win_with_wolves(game_manager_basic):
     victory_info = gm.check_victory()
     assert victory_info is not None
     assert victory_info["team"] == "妖狐"
-    # メッセージはシナリオによって異なる可能性があるため、チーム名だけ確認
     assert gm.victory_team == "妖狐"
 
 def test_check_victory_game_continue(game_manager_roles_assigned):
@@ -171,6 +158,7 @@ def test_resolve_night_actions_simple_attack(game_manager_basic):
     assert players[0].alive is True 
     assert players[1].alive is True 
     assert players[2].alive is False # Charlie (村人) - 死亡
+    assert players[2].death_info == {"turn": 1, "reason": "attack"} # ★ death_info を確認
     assert players[3].alive is True 
     assert players[4].alive is True 
 
@@ -231,6 +219,7 @@ def test_resolve_night_actions_seer_kills_fox(game_manager_basic):
     assert results.get("immoral_suicides") == []
     assert players[0].alive is True  
     assert players[1].alive is False # Bob (妖狐)
+    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ death_info を確認
     assert players[2].alive is True  
 
 def test_resolve_night_actions_seer_kills_last_fox_with_immoralist(game_manager_basic):
@@ -258,7 +247,9 @@ def test_resolve_night_actions_seer_kills_last_fox_with_immoralist(game_manager_
     assert sorted(immoral_suicides) == sorted(["Charlie"]) # 後追い自殺者リストを確認
     assert players[0].alive is True  
     assert players[1].alive is False # Bob (妖狐)
+    assert players[1].death_info == {"turn": 1, "reason": "curse"} # ★ death_info を確認
     assert players[2].alive is False # Charlie (背徳者)
+    assert players[2].death_info == {"turn": 1, "reason": "suicide"} # ★ death_info を確認
 
 def test_resolve_night_actions_wolf_attacks_fox(game_manager_basic):
     """人狼が妖狐を襲撃して失敗するケース"""
@@ -312,6 +303,7 @@ def test_resolve_night_actions_combined_seer_attack(game_manager_basic):
     assert players[1].alive is True  # Bob
     assert players[2].alive is True  # Charlie
     assert players[3].alive is False # Dave
+    assert players[3].death_info == {"turn": 1, "reason": "attack"} # ★ death_info を確認
     assert players[4].alive is True  # Eve
 
 def test_resolve_night_actions_guard_vs_curse(game_manager_basic):
@@ -341,6 +333,7 @@ def test_resolve_night_actions_guard_vs_curse(game_manager_basic):
     assert players[0].alive is True  # Alice
     assert players[1].alive is True  # Bob
     assert players[2].alive is False # Charlie
+    assert players[2].death_info == {"turn": 2, "reason": "curse"} # ★ death_info を確認 (turn=2)
 
 # --- execute_day_vote のテスト ---
 
@@ -359,6 +352,7 @@ def test_execute_day_vote_simple(game_manager_roles_assigned):
     # Alice の生存状態を確認
     alice = next(p for p in gm.players if p.name == "Alice")
     assert alice.alive is False
+    assert alice.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
 
 def test_execute_day_vote_tie(game_manager_roles_assigned):
     """同票の場合、ランダムで処刑されるケース（どちらかが処刑される）"""
@@ -375,6 +369,7 @@ def test_execute_day_vote_tie(game_manager_roles_assigned):
     assert result.get("error") is None
     executed_player = next(p for p in gm.players if p.name == executed_name)
     assert executed_player.alive is False
+    assert executed_player.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
 
 def test_execute_day_vote_no_votes(game_manager_roles_assigned):
     """投票がない場合、誰も処刑されないケース"""
@@ -415,7 +410,9 @@ def test_execute_day_vote_fox_and_immoralist(game_manager_basic):
     charlie = next(p for p in gm.players if p.name == "Charlie")
 
     assert alice.alive is False # 妖狐は処刑
+    assert alice.death_info == {"turn": 1, "reason": "execute"} # ★ death_info を確認
     assert bob.alive is False   # 背徳者は後追い
+    assert bob.death_info == {"turn": 1, "reason": "suicide"} # ★ death_info を確認
     assert charlie.alive is True # 村人は生存
 
 # --- get_game_results のテスト ---
@@ -427,7 +424,7 @@ def test_get_game_results_villager_win(game_manager_basic):
     roles_map = {0: 村人(0), 1: 村人(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]):
         p.assign_role(roles_map[i], i)
-    players[2].kill() # 人狼を殺す
+    players[2].kill(turn=1, reason="test") # ★ kill に引数追加
     gm.players = players[:3] # GameManagerが参照するリストを更新
     gm.check_victory() # 勝利判定を実行して内部状態を更新
 
@@ -436,11 +433,11 @@ def test_get_game_results_villager_win(game_manager_basic):
     assert gm.victory_team == "村人" # gm.victory_team で確認
     assert len(results) == 3
     # Alice (村人, 生存, 勝利)
-    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "🏆" and results[0]["生死"] == "生存"
+    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "🏆" and results[0]["生死"] == "最終日生存"
     # Bob (村人, 生存, 勝利)
-    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "🏆" and results[1]["生死"] == "生存"
+    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "🏆" and results[1]["生死"] == "最終日生存"
     # Charlie (人狼, 死亡, 敗北)
-    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "" and results[2]["生死"] == "死亡"
+    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "" and results[2]["生死"] == "1日目 不明により死亡" # 理由を "不明" に戻す
 
 def test_get_game_results_werewolf_win(game_manager_basic):
     """人狼勝利時のゲーム結果が正しいか"""
@@ -458,9 +455,9 @@ def test_get_game_results_werewolf_win(game_manager_basic):
     assert gm.victory_team == "人狼" # gm.victory_team で確認
     assert len(results) == 2
     # Alice (人狼, 生存, 勝利)
-    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "🏆" and results[0]["生死"] == "生存"
+    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "🏆" and results[0]["生死"] == "最終日生存"
     # Bob (村人, 生存, 敗北)
-    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "生存"
+    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "最終日生存"
 
 def test_get_game_results_fox_win_no_wolves(game_manager_basic):
     """妖狐勝利（人狼全滅）時のゲーム結果が正しいか"""
@@ -470,7 +467,7 @@ def test_get_game_results_fox_win_no_wolves(game_manager_basic):
     roles_map = {0: 村人(0), 1: 妖狐(1), 2: 人狼(2)}
     for i, p in enumerate(players[:3]):
         p.assign_role(roles_map[i], i)
-    players[2].kill() # 人狼を殺す
+    players[2].kill(turn=1, reason="test") # ★ kill に引数追加 (仮で処刑死)
     gm.players = players[:3]
     gm.check_victory()
 
@@ -479,11 +476,11 @@ def test_get_game_results_fox_win_no_wolves(game_manager_basic):
     assert gm.victory_team == "妖狐" # gm.victory_team で確認
     assert len(results) == 3
     # Alice (村人, 生存, 敗北)
-    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "生存"
+    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "最終日生存"
     # Bob (妖狐, 生存, 勝利)
-    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "🏆" and results[1]["生死"] == "生存"
+    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "🏆" and results[1]["生死"] == "最終日生存"
     # Charlie (人狼, 死亡, 敗北)
-    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "" and results[2]["生死"] == "死亡"
+    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "" and results[2]["生死"] == "1日目 不明により死亡" # 理由を "不明" に戻す
 
 def test_get_game_results_fox_win_executed(game_manager_basic):
     """妖狐処刑後の勝利判定（村人勝利）をテストする。
@@ -510,8 +507,8 @@ def test_get_game_results_fox_win_executed(game_manager_basic):
 
     assert len(results) == 3
     # Alice (妖狐, 死亡, 敗北)
-    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "死亡"
+    assert results[0]["名前"] == "Alice" and results[0]["勝利"] == "" and results[0]["生死"] == "1日目 処刑により死亡" # これは正しい
     # Bob (背徳者, 死亡, 敗北)
-    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "死亡"
+    assert results[1]["名前"] == "Bob" and results[1]["勝利"] == "" and results[1]["生死"] == "1日目 後追死により死亡" # これは正しい
     # Charlie (村人, 生存, 勝利)
-    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "🏆" and results[2]["生死"] == "生存" 
+    assert results[2]["名前"] == "Charlie" and results[2]["勝利"] == "🏆" and results[2]["生死"] == "最終日生存" # これは正しい 

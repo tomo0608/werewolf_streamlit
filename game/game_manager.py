@@ -92,23 +92,40 @@ class GameManager:
     def get_game_results(self) -> List[Dict[str, Any]]:
         """ゲーム終了時の結果情報をリストとして返す。"""
         results = []
-        # 勝利チームが確定しているか確認 (check_victory で設定される)
         has_winner = self.victory_team is not None
+        
+        # 死因を日本語に変換する辞書
+        reason_map = {
+            "attack": "襲撃",
+            "execute": "処刑",
+            "curse": "呪殺",
+            "suicide": "後追死"
+        }
         
         for player in self.players:
             # 勝利プレイヤーかどうかを判定
             is_winner = False
             if has_winner:
-                # プレイヤーのチームが勝利チームと一致すれば勝利 (生死問わず)
                 if player.role.team == self.victory_team:
                     is_winner = True
+            
+            # 生死情報の生成
+            status = "最終日生存" # デフォルト
+            if not player.alive:
+                if player.death_info:
+                    turn = player.death_info.get("turn", "?")
+                    reason_en = player.death_info.get("reason", "unknown")
+                    reason_ja = reason_map.get(reason_en, "不明")
+                    status = f"{turn}日目 {reason_ja}により死亡"
+                else:
+                    status = "死亡(詳細不明)"
             
             results.append({
                 "名前": player.name,
                 "役職": player.role.name,
-                "生死": "生存" if player.alive else "死亡",
+                "生死": status, # 詳細な生死情報を使用
                 "陣営": player.role.team,
-                "勝利": "🏆" if is_winner else "", # 絵文字で表現
+                "勝利": "🏆" if is_winner else "", 
             })
         return results
 
@@ -161,25 +178,20 @@ class GameManager:
         executed_player = next((p for p in self.players if p.name == executed_name), None)
 
         if executed_player and executed_player.alive:
-            executed_player.kill()
+            executed_player.kill(self.turn, "execute")
             self.last_executed_name = executed_name
-            result["executed"] = executed_name # 処刑者名を結果に設定
+            result["executed"] = executed_name
             if self.debug_mode: 
                 debug_info_list.append(f"{executed_name} を処刑しました")
 
             # 妖狐処刑時の後追い処理
             if executed_player.role.name == "妖狐":
-                # この時点で生存している妖狐はいないはずなので、get_alive_playersは使わない
-                # alive_foxes = [p for p in self.get_alive_players() if p.role.name == "妖狐"]
-                # if not alive_foxes:
                 if self.debug_mode: 
                     debug_info_list.append("最後の妖狐が処刑されたため、背徳者の後追い処理を開始")
-                # この時点で生存している背徳者を探して処理
                 immoral_players_to_kill = [p for p in self.get_alive_players() if p.role.name == "背徳者"]
                 for immoral in immoral_players_to_kill:
-                    # if immoral.alive: # get_alive_players で取得しているので不要
-                    immoral.kill()
-                    result["immoral_suicides"].append(immoral.name) # 後追い自殺者リストに追加
+                    immoral.kill(self.turn, "suicide")
+                    result["immoral_suicides"].append(immoral.name)
                     if self.debug_mode: 
                         debug_info_list.append(f"{immoral.name}(背徳者) が後追い自殺")
             
@@ -254,21 +266,18 @@ class GameManager:
                         seer_result = target_player.role.seer_result()
                         seer_actions[player_name] = {"target": target_name, "result": seer_result}
                         if target_player.role.name == "妖狐":
-                            target_player.kill()
+                            target_player.kill(self.turn, "curse")
                             night_victims.add(target_name)
                             if self.debug_mode: 
                                 result["debug"].append(f"{player_name}が{target_name}(妖狐)を呪殺")
                             # 最後の妖狐かチェックし、背徳者後追い処理
-                            # この時点で生存している妖狐を探す
                             remaining_alive_foxes = [p for p in self.get_alive_players() if p.role.name == "妖狐" and p.alive]
                             if not remaining_alive_foxes:
-                                # 生存している背徳者を探す
                                 immoral_players_to_kill = [p for p in self.get_alive_players() if p.role.name == "背徳者" and p.alive]
                                 for immoral in immoral_players_to_kill:
-                                    # if immoral.alive: # 上でチェック済み
-                                    immoral.kill()
-                                    night_victims.add(immoral.name) # 夜の犠牲者にも追加
-                                    result["immoral_suicides"].append(immoral.name) # 後追い自殺リストに追加
+                                    immoral.kill(self.turn, "suicide")
+                                    night_victims.add(immoral.name) 
+                                    result["immoral_suicides"].append(immoral.name)
                                     if self.debug_mode: 
                                         result["debug"].append(f"妖狐全滅により{immoral.name}(背徳者)が後追い")
                     elif player.role.name == "偽占い師":
@@ -300,7 +309,7 @@ class GameManager:
                 is_protected = wolf_attack_victim_name in guard_targets
                 is_fox = victim_player.role.name == "妖狐"
                 if not is_protected and not is_fox:
-                    victim_player.kill()
+                    victim_player.kill(self.turn, "attack")
                     night_victims.add(wolf_attack_victim_name)
                     if self.debug_mode: 
                         result["debug"].append(f"襲撃成功: {wolf_attack_victim_name} が死亡")
