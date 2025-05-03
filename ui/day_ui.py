@@ -17,11 +17,11 @@ def render_day_phase():
     victim_message_parts = []
     if last_victims:
         victim_message_parts.append(f"昨晩の犠牲者は **{', '.join(last_victims)}** でした。")
-    if last_immoral_suicides:
-        victim_message_parts.append(f"妖狐が死亡したため、**{', '.join(last_immoral_suicides)}** が後を追いました。")
 
     if victim_message_parts:
         st.error("\n".join(victim_message_parts))
+        if gm.debug_mode and last_immoral_suicides:
+            st.write(f"DEBUG: 妖狐が死亡したため、**{', '.join(last_immoral_suicides)}** が後を追いました。")
     else:
         st.info("昨晩は誰も死亡しませんでした。")
 
